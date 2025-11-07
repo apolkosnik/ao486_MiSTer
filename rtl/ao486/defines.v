@@ -60,6 +60,16 @@
 //------------------------------------------------------------------------------
 
 `define CMD_NULL            7'd0
+`define CMD_MOV             7'd1
+`define CMD_ADD             7'd2
+`define CMD_ADC             7'd3
+`define CMD_SUB             7'd4
+`define CMD_SBB             7'd5
+`define CMD_CMP             7'd6
+`define CMD_AND             7'd7
+`define CMD_TEST            7'd8
+`define CMD_OR              7'd9
+`define CMD_XOR             7'd10
 
 `define CMDEX_NULL          4'd0
 
