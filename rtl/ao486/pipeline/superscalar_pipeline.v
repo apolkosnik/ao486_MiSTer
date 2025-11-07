@@ -153,11 +153,11 @@ assign inst0_uses_alu =
     (inst0_cmd == `CMD_TEST) || (inst0_cmd == `CMD_OR) ||
     (inst0_cmd == `CMD_XOR) || (inst0_cmd == `CMD_MOV);
 
-assign inst0_uses_mult = inst0_decoder[20];      // Example bit for multiply
-assign inst0_uses_div = inst0_decoder[21];       // Example bit for divide
+assign inst0_uses_mult = inst0_decoder[`DECODER_IS_MULT_BIT];
+assign inst0_uses_div = inst0_decoder[`DECODER_IS_DIV_BIT];
 assign inst0_uses_memory = inst0_mutex[`MUTEX_MEMORY_BIT];
-assign inst0_is_branch = inst0_decoder[22];      // Example bit for branch
-assign inst0_is_complex = inst0_decoder[23];     // Example bit for complex µcode
+assign inst0_is_branch = inst0_decoder[`DECODER_IS_BRANCH_BIT];
+assign inst0_is_complex = inst0_decoder[`DECODER_IS_COMPLEX_BIT];
 
 // Classify instruction 1
 wire inst1_uses_alu;
@@ -174,11 +174,11 @@ assign inst1_uses_alu =
     (inst1_cmd == `CMD_TEST) || (inst1_cmd == `CMD_OR) ||
     (inst1_cmd == `CMD_XOR) || (inst1_cmd == `CMD_MOV);
 
-assign inst1_uses_mult = inst1_decoder[20];
-assign inst1_uses_div = inst1_decoder[21];
+assign inst1_uses_mult = inst1_decoder[`DECODER_IS_MULT_BIT];
+assign inst1_uses_div = inst1_decoder[`DECODER_IS_DIV_BIT];
 assign inst1_uses_memory = inst1_mutex[`MUTEX_MEMORY_BIT];
-assign inst1_is_branch = inst1_decoder[22];
-assign inst1_is_complex = inst1_decoder[23];
+assign inst1_is_branch = inst1_decoder[`DECODER_IS_BRANCH_BIT];
+assign inst1_is_complex = inst1_decoder[`DECODER_IS_COMPLEX_BIT];
 
 //------------------------------------------------------------------------------
 // Execution Unit Status
@@ -427,10 +427,16 @@ forwarding forward_inst(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
-    // Read stage request (simplified)
-    .rd_reg_request         (3'b0),
-    .rd_reg_request_valid   (1'b0),
-    .rd_need_eflags         (1'b0),
+    // Read stage request (INTEGRATION REQUIRED)
+    // WARNING: These inputs are hardcoded to zero because this module is not
+    // yet integrated with the READ stage. For full forwarding functionality:
+    // - rd_reg_request must connect to the register being read by READ stage
+    // - rd_reg_request_valid must be high when READ stage needs a register
+    // - rd_need_eflags must be high when READ stage needs EFLAGS
+    // Without these connections, forwarding detection will not work correctly.
+    .rd_reg_request         (3'b0),             // TODO: Connect to READ stage
+    .rd_reg_request_valid   (1'b0),             // TODO: Connect to READ stage
+    .rd_need_eflags         (1'b0),             // TODO: Connect to READ stage
 
     // EXE0 stage
     .exe0_valid             (exe0_valid_reg),

@@ -1,0 +1,323 @@
+================================================================================
+AO486 SUPERSCALAR INTEGRATION - QUICK REFERENCE GUIDE
+================================================================================
+
+CRITICAL ISSUES - MUST FIX BEFORE INTEGRATION
+================================================================================
+
+1. FORWARDING MODULE HAS HARDCODED ZERO INPUTS
+   File: rtl/ao486/pipeline/superscalar_pipeline.v
+   Lines: 431-433
+   
+   Code:
+   ----
+   forwarding forward_inst(
+       ...
+       .rd_reg_request         (3'b0),          // ← ALWAYS ZERO!
+       .rd_reg_request_valid   (1'b0),          // ← ALWAYS ZERO!
+       .rd_need_eflags         (1'b0),          // ← ALWAYS ZERO!
+   
+   Fix:
+   ----
+   Need to:
+   - Connect rd_reg_request from READ stage instruction register selectors
+   - Connect rd_reg_request_valid when READ stage is reading registers
+   - Detect rd_need_eflags based on instruction type needing flag inputs
+
+---
+
+2. INSTRUCTION CLASSIFICATION USES UNDEFINED MAGIC BITS
+   File: rtl/ao486/pipeline/superscalar_pipeline.v
+   Lines: 156-160
+   
+   Code:
+   ----
+   assign inst0_uses_mult = inst0_decoder[20];  // Magic bit!
+   assign inst0_uses_div = inst0_decoder[21];   // Magic bit!
+   
+   Issue:
+   ------
+   Decoder bit positions [20] and [21] are not documented. These won't
+   work correctly. Need to determine actual bit positions for:
+   - multiply indicator
+   - divide indicator
+   - memory operation indicator
+   
+   Action Required:
+   ----------------
+   1. Examine decode_commands.v to find actual instruction property bits
+   2. Define named constants like DECODER_IS_MULT_BIT
+   3. Replace magic numbers with proper definitions
+
+---
+
+3. DEPENDENCY ANALYSIS MISSING MUTEX_IO_BIT CHECK
+   File: rtl/ao486/pipeline/dispatch.v
+   Lines: 78-82
+   
+   Code:
+   ----
+   assign raw_dependency_01 =
+       inst0_valid && inst1_valid &&
+       ((inst0_mutex[7:0] & inst1_mutex[7:0]) != 8'b0 ||
+        (inst0_mutex[8] && inst1_mutex[8]) ||
+        (inst0_mutex[9] && inst1_mutex[9]));
+   
+   Issue:
+   ------
+   MUTEX_IO_BIT (bit 11) is defined but not checked for dependencies.
+   If both instructions do I/O, conflict won't be detected.
+   
+   Fix:
+   ----
+   Add to the conditional:
+       || (inst0_mutex[11] && inst1_mutex[11])
+
+---
+
+4. WRONG MUTEX SOURCE FOR DEPENDENCY ANALYSIS  
+   File: rtl/ao486/pipeline/dispatch.v
+   Lines: 85-100
+   
+   Code:
+   ----
+   wire pipeline_mutex;
+   assign pipeline_mutex = exe0_mutex | exe1_mutex | wr0_mutex | wr1_mutex;
+   
+   wire inst0_has_dependency;
+   assign inst0_has_dependency =
+       inst0_valid &&
+       ((inst0_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||
+        ...
+   
+   Issue:
+   ------
+   The dependency analysis uses inst0_mutex (what inst0 WILL SET) against
+   pipeline_mutex (what's currently in flight). But it should check what
+   inst0 will READ against what's being written.
+   
+   This is conceptually backwards:
+   - inst0_mutex[EAX_BIT] = 1 means inst0 will WRITE to EAX
+   - pipeline_mutex[EAX_BIT] = 1 means something in flight will write to EAX
+   - Conflict only if inst0 READS EAX and something WRITES to it
+   
+   Current check doesn't determine if inst0 reads EAX or writes to EAX.
+
+---
+
+5. MISSING DUAL-INSTRUCTION PIPELINE INTERFACE
+   File: rtl/ao486/pipeline/pipeline.v
+   Status: Monolithic single-issue design
+   
+   Problem:
+   --------
+   pipeline.v outputs single instruction signals:
+   - rd_cmd (7 bits)
+   - rd_cmdex (4 bits)
+   - rd_src_wire (32 bits)
+   - rd_dst_wire (32 bits)
+   
+   But superscalar_pipeline.v expects dual instructions:
+   - inst0_cmd, inst1_cmd
+   - inst0_cmdex, inst1_cmdex
+   - inst0_src, inst1_src
+   - inst0_dst, inst1_dst
+   
+   This is a fundamental architectural mismatch that requires restructuring
+   the entire pipeline to support dual-instruction flow.
+
+================================================================================
+
+HIGH PRIORITY ISSUES
+================================================================================
+
+6. FORWARDING MODULE NEVER FORWARDS ANYTHING
+   File: rtl/ao486/pipeline/forwarding.v
+   Status: Completely stubbed out
+   
+   Problem:
+   --------
+   Because of issue #1 (hardcoded zero inputs), the forwarding detection
+   logic in forwarding.v never activates:
+   
+   Lines 73-78:
+   wire exe0_matches_reg;
+   assign exe0_matches_reg =
+       exe0_valid &&
+       exe0_dst_is_reg &&
+       rd_reg_request_valid &&           // ← This is always 0!
+       (exe0_dst_reg == rd_reg_request); // ← Never compares
+   
+   Impact:
+   -------
+   No result forwarding occurs. Every data dependency causes a stall,
+   defeating the performance benefits of superscalar execution.
+
+---
+
+7. MISSING MEMORY OPERATIONS IN DUAL EXECUTE
+   File: rtl/ao486/pipeline/dual_execute.v
+   Status: Not implemented
+   
+   Issue:
+   ------
+   The dual_execute module only handles ALU operations (ADD, SUB, MOV, etc.)
+   It does not handle:
+   - Load/Store operations
+   - Memory addressing
+   - Memory forwarding between instructions
+   
+   Both instructions cannot touch memory simultaneously.
+   
+   Would need:
+   - Shared load/store queue or dual memory ports
+   - Memory address translation for both instructions
+   - Memory dependency tracking (inst0 writes, inst1 reads same address)
+   - Cache conflict detection
+
+---
+
+8. EXCEPTION HANDLING FOR DUAL-ISSUE NOT DESIGNED
+   Status: Not in any module
+   
+   Problem:
+   --------
+   Current ao486 has single-instruction exception handling:
+   - execute.v triggers exception
+   - write.v handles it
+   - Pipeline resets
+   
+   With dual-issue, conflicts arise:
+   - What if ALU0 raises divide-by-zero while ALU1 completes?
+   - Which instruction's results are committed?
+   - How to handle task switches mid-dual-issue?
+   
+   Needs:
+   - Per-ALU exception tracking
+   - Exception prioritization logic
+   - Selective instruction retirement
+   - Synchronization points in pipeline
+
+================================================================================
+
+MEDIUM PRIORITY ISSUES
+================================================================================
+
+9. NO TEST BENCHES FOR SUPERSCALAR MODULES
+   Missing Files:
+   - sim/iverilog/superscalar/tb_dispatch.v
+   - sim/iverilog/superscalar/tb_dual_execute.v
+   - sim/iverilog/superscalar/tb_forwarding.v
+   - sim/iverilog/superscalar/tb_superscalar_pipeline.v
+   
+   Tests Needed:
+   - Dispatch unit RAW dependency detection (various combinations)
+   - Dual execute arithmetic correctness (ADD, SUB, AND, OR, XOR, MOV)
+   - Result forwarding correctness (EXE->READ, WR->READ)
+   - Register file coherency (both ALUs write same register)
+   - Exception handling in dual-issue scenarios
+   - Performance counter accuracy
+
+---
+
+10. PIPELINE STATE TRACKING INCOMPLETE
+    File: rtl/ao486/pipeline/superscalar_pipeline.v
+    Lines: 194-266
+    
+    Issue:
+    ------
+    The pipeline state registers track exe0/exe1/wr0/wr1 validity and mutex:
+    
+    Lines 214-246:
+    always @(posedge clk) begin
+        if (dispatch_inst0) begin
+            exe0_mutex_reg <= inst0_mutex;
+            exe0_valid_reg <= 1'b1;
+        ...
+    
+    Problems:
+    - These track in-flight mutex, not what instructions will READ/WRITE
+    - Forwarding network uses these but they don't represent actual data deps
+    - No tracking of which registers/flags are actually used by instructions
+    - No tracking of instruction type (ALU vs MEM vs complex)
+
+================================================================================
+
+VERIFIED AS CORRECT
+================================================================================
+
+11. COMMAND DEFINITIONS (CMD_ADD, CMD_MOV, etc.)
+    Files: rtl/ao486/defines.v, rtl/ao486/autogen/defines.v
+    Status: ✓ CORRECT
+    
+    Details:
+    --------
+    defines.v includes autogen/defines.v at the end, which redefines
+    all CMD_* constants with correct values. All modules correctly get
+    the autogen versions through the include chain.
+    
+    Caveat:
+    -------
+    If someone manually includes only defines.v without autogen, or
+    caches preprocessing results, it would break. But as currently
+    structured, it works correctly.
+
+================================================================================
+
+SPECIFIC FILE LOCATIONS & LINES
+================================================================================
+
+Critical File Changes Needed:
+
+1. superscalar_pipeline.v
+   - Lines 147-182: Instruction classification logic (uses magic bits)
+   - Lines 431-433: Forwarding module instantiation (hardcoded zeros)
+   - Lines 194-266: Pipeline state tracking (incomplete)
+
+2. dispatch.v
+   - Lines 78-82: RAW dependency check (missing MUTEX_IO_BIT)
+   - Lines 85-100: Pipeline dependency analysis (wrong mutex source)
+
+3. forwarding.v
+   - Lines 73-102: Register matching logic (never triggered)
+   - Lines 143-150: Forwarding priority logic (dead code)
+
+4. dual_execute.v
+   - Complete implementation present, but:
+   - No memory operations support
+   - No exception handling
+   - No bypass to operand paths
+
+5. pipeline.v
+   - NO dual-instruction interface - entire module needs restructuring
+   - Lines 507, 668, 670: Single rd_cmd, rd_cmdex, rd_mutex_next outputs
+
+================================================================================
+
+EFFORT ESTIMATES FOR FIXES
+================================================================================
+
+Immediate (Must do before integration):
+- Fix forwarding hardcoded zeros: 2 hours
+- Document decoder bits: 4 hours
+- Create basic test benches: 8 hours
+- Fix MUTEX checking: 2 hours
+Total: ~16 hours
+
+Short Term (For basic functionality):
+- Prototype dual-instruction interface: 16 hours
+- Implement dual register read: 12 hours
+- Add dispatch stage: 8 hours
+Total: ~36 hours
+
+Medium Term (For full integration):
+- Complete pipeline restructuring: 80+ hours
+- Dual write-back support: 40+ hours
+- Exception coordination: 20+ hours
+- Full testing and validation: 40+ hours
+Total: ~180+ hours
+
+Recommended: Do Immediate issues first, then evaluate architectural approach
+before committing to full integration effort.
+
+================================================================================

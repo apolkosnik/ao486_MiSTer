@@ -159,6 +159,15 @@
 `define MUTEX_ACTIVE_BIT    10
 `define MUTEX_IO_BIT        11
 
+// Decoder bits for instruction classification (superscalar)
+// WARNING: These are placeholder bit positions that MUST be verified
+// against the actual decoder output structure before production use.
+// The decoder is an 88-bit or 96-bit vector with instruction properties.
+`define DECODER_IS_MULT_BIT     20  // Instruction uses multiplier (PLACEHOLDER)
+`define DECODER_IS_DIV_BIT      21  // Instruction uses divider (PLACEHOLDER)
+`define DECODER_IS_BRANCH_BIT   22  // Instruction is a branch (PLACEHOLDER)
+`define DECODER_IS_COMPLEX_BIT  23  // Instruction needs microcode (PLACEHOLDER)
+
 `define ARITH_VALID 4'd8
 
 `define ARITH_ADD   4'd0
