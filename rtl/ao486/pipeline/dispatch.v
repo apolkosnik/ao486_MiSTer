@@ -86,19 +86,34 @@ assign raw_dependency_01 =
 wire [10:0] pipeline_mutex;
 assign pipeline_mutex = exe0_mutex | exe1_mutex | wr0_mutex | wr1_mutex;
 
+// NOTE: Mutex ambiguity issue
+// The ao486 mutex vector does not distinguish between registers/resources that
+// an instruction READS vs WRITES. The mutex bit is set if the instruction
+// accesses that resource in any way. This means we're detecting WAW (Write-After-Write)
+// and potentially WAR (Write-After-Read) hazards, but the real hazard we care about
+// is RAW (Read-After-Write).
+//
+// Ideally we would check: "Does inst0 READ something that pipeline is WRITING?"
+// But we can only check: "Does inst0 ACCESS something that pipeline ACCESSES?"
+//
+// This is conservative (may cause unnecessary stalls) but safe (won't miss dependencies).
+// A proper fix would require extending the mutex system to track read/write separately.
+
 wire inst0_has_dependency;
 assign inst0_has_dependency =
     inst0_valid &&
-    ((inst0_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||
-     (inst0_mutex[8] && pipeline_mutex[8]) ||
-     (inst0_mutex[9] && pipeline_mutex[9]));
+    ((inst0_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||   // Register dependency
+     (inst0_mutex[8] && pipeline_mutex[8]) ||              // EFLAGS dependency
+     (inst0_mutex[9] && pipeline_mutex[9]) ||              // Memory dependency
+     (inst0_mutex[11] && pipeline_mutex[11]));             // I/O dependency
 
 wire inst1_has_dependency;
 assign inst1_has_dependency =
     inst1_valid &&
-    ((inst1_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||
-     (inst1_mutex[8] && pipeline_mutex[8]) ||
-     (inst1_mutex[9] && pipeline_mutex[9]));
+    ((inst1_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||   // Register dependency
+     (inst1_mutex[8] && pipeline_mutex[8]) ||              // EFLAGS dependency
+     (inst1_mutex[9] && pipeline_mutex[9]) ||              // Memory dependency
+     (inst1_mutex[11] && pipeline_mutex[11]));             // I/O dependency
 
 //------------------------------------------------------------------------------
 // Resource Conflict Detection
