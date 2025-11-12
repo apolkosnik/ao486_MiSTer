@@ -36,44 +36,44 @@ end
 // DUT Signals
 //------------------------------------------------------------------------------
 
-reg             dispatch_reset;
+reg             dispatch_reset = 0;
 
 // Instruction 0
-reg             inst0_valid;
-reg [6:0]       inst0_cmd;
-reg [3:0]       inst0_cmdex;
-reg [10:0]      inst0_mutex;
-reg             inst0_uses_alu;
-reg             inst0_uses_mult;
-reg             inst0_uses_div;
-reg             inst0_uses_memory;
-reg             inst0_is_branch;
-reg             inst0_is_complex;
+reg             inst0_valid = 0;
+reg [6:0]       inst0_cmd = 0;
+reg [3:0]       inst0_cmdex = 0;
+reg [10:0]      inst0_mutex = 0;
+reg             inst0_uses_alu = 0;
+reg             inst0_uses_mult = 0;
+reg             inst0_uses_div = 0;
+reg             inst0_uses_memory = 0;
+reg             inst0_is_branch = 0;
+reg             inst0_is_complex = 0;
 
 // Instruction 1
-reg             inst1_valid;
-reg [6:0]       inst1_cmd;
-reg [3:0]       inst1_cmdex;
-reg [10:0]      inst1_mutex;
-reg             inst1_uses_alu;
-reg             inst1_uses_mult;
-reg             inst1_uses_div;
-reg             inst1_uses_memory;
-reg             inst1_is_branch;
-reg             inst1_is_complex;
+reg             inst1_valid = 0;
+reg [6:0]       inst1_cmd = 0;
+reg [3:0]       inst1_cmdex = 0;
+reg [10:0]      inst1_mutex = 0;
+reg             inst1_uses_alu = 0;
+reg             inst1_uses_mult = 0;
+reg             inst1_uses_div = 0;
+reg             inst1_uses_memory = 0;
+reg             inst1_is_branch = 0;
+reg             inst1_is_complex = 0;
 
 // Execution unit status
-reg             alu0_busy;
-reg             alu1_busy;
-reg             mult_busy;
-reg             div_busy;
-reg             mem_busy;
+reg             alu0_busy = 0;
+reg             alu1_busy = 0;
+reg             mult_busy = 0;
+reg             div_busy = 0;
+reg             mem_busy = 0;
 
 // Pipeline mutex state
-reg [10:0]      exe0_mutex;
-reg [10:0]      exe1_mutex;
-reg [10:0]      wr0_mutex;
-reg [10:0]      wr1_mutex;
+reg [10:0]      exe0_mutex = 0;
+reg [10:0]      exe1_mutex = 0;
+reg [10:0]      wr0_mutex = 0;
+reg [10:0]      wr1_mutex = 0;
 
 // Outputs
 wire            dispatch_inst0;

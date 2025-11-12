@@ -57,16 +57,16 @@ module dispatch(
     input       [10:0]  wr1_mutex,
 
     // Dispatch outputs
-    output              dispatch_inst0,      // Dispatch instruction 0
-    output              dispatch_inst1,      // Dispatch instruction 1
-    output              inst0_to_alu0,       // Route inst0 to ALU0
-    output              inst0_to_alu1,       // Route inst0 to ALU1
-    output              inst1_to_alu0,       // Route inst1 to ALU0
-    output              inst1_to_alu1,       // Route inst1 to ALU1
+    output wire         dispatch_inst0,      // Dispatch instruction 0
+    output wire         dispatch_inst1,      // Dispatch instruction 1
+    output wire         inst0_to_alu0,       // Route inst0 to ALU0
+    output wire         inst0_to_alu1,       // Route inst0 to ALU1
+    output wire         inst1_to_alu0,       // Route inst1 to ALU0
+    output wire         inst1_to_alu1,       // Route inst1 to ALU1
 
-    output              dual_issue,          // Both instructions issued
-    output              stall_dependency,    // Stall due to data dependency
-    output              stall_structural     // Stall due to resource conflict
+    output wire         dual_issue,          // Both instructions issued
+    output wire         stall_dependency,    // Stall due to data dependency
+    output wire         stall_structural     // Stall due to resource conflict
 );
 
 //------------------------------------------------------------------------------
@@ -166,9 +166,10 @@ assign can_dispatch_inst1 =
     (inst1_uses_memory ? mem_available : 1'b1);
 
 // Dispatch decisions
-assign dispatch_inst0 = can_dispatch_inst0;
-assign dispatch_inst1 = can_dispatch_inst0 && can_dispatch_inst1;
-assign dual_issue = dispatch_inst0 && dispatch_inst1;
+// NOTE: Use explicit 1'b0/1'b1 to avoid X propagation
+assign dispatch_inst0 = (rst_n == 1'b0) ? 1'b0 : can_dispatch_inst0;
+assign dispatch_inst1 = (rst_n == 1'b0) ? 1'b0 : (can_dispatch_inst0 && can_dispatch_inst1);
+assign dual_issue = (rst_n == 1'b0) ? 1'b0 : (dispatch_inst0 && dispatch_inst1);
 
 //------------------------------------------------------------------------------
 // Execution Unit Assignment
