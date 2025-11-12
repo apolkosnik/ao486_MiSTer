@@ -143,15 +143,16 @@ wire inst0_must_single_issue = inst0_is_complex || inst0_is_branch || inst0_uses
 wire inst1_must_single_issue = inst1_is_complex || inst1_is_branch || inst1_uses_div;
 
 // Can we dispatch inst0?
+// NOTE: Check for == 1'b0 first to handle any potential X/Z values safely
 wire inst0_alu_ok;
 wire inst0_mult_ok;
 wire inst0_div_ok;
 wire inst0_mem_ok;
 
-assign inst0_alu_ok = inst0_uses_alu ? (alu0_available || alu1_available) : 1'b1;
-assign inst0_mult_ok = inst0_uses_mult ? mult_available : 1'b1;
-assign inst0_div_ok = inst0_uses_div ? div_available : 1'b1;
-assign inst0_mem_ok = inst0_uses_memory ? mem_available : 1'b1;
+assign inst0_alu_ok = (inst0_uses_alu == 1'b0) ? 1'b1 : (alu0_available || alu1_available);
+assign inst0_mult_ok = (inst0_uses_mult == 1'b0) ? 1'b1 : mult_available;
+assign inst0_div_ok = (inst0_uses_div == 1'b0) ? 1'b1 : div_available;
+assign inst0_mem_ok = (inst0_uses_memory == 1'b0) ? 1'b1 : mem_available;
 
 wire can_dispatch_inst0;
 assign can_dispatch_inst0 =
@@ -167,9 +168,9 @@ wire inst1_alu_ok;
 wire inst1_mult_ok;
 wire inst1_mem_ok;
 
-assign inst1_alu_ok = inst1_uses_alu ? (alu0_available || alu1_available) : 1'b1;
-assign inst1_mult_ok = inst1_uses_mult ? mult_available : 1'b1;
-assign inst1_mem_ok = inst1_uses_memory ? mem_available : 1'b1;
+assign inst1_alu_ok = (inst1_uses_alu == 1'b0) ? 1'b1 : (alu0_available || alu1_available);
+assign inst1_mult_ok = (inst1_uses_mult == 1'b0) ? 1'b1 : mult_available;
+assign inst1_mem_ok = (inst1_uses_memory == 1'b0) ? 1'b1 : mem_available;
 
 wire can_dispatch_inst1;
 assign can_dispatch_inst1 =
