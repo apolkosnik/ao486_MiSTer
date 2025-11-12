@@ -57,16 +57,16 @@ module dispatch(
     input       [10:0]  wr1_mutex,
 
     // Dispatch outputs
-    output wire         dispatch_inst0,      // Dispatch instruction 0
-    output wire         dispatch_inst1,      // Dispatch instruction 1
-    output wire         inst0_to_alu0,       // Route inst0 to ALU0
-    output wire         inst0_to_alu1,       // Route inst0 to ALU1
-    output wire         inst1_to_alu0,       // Route inst1 to ALU0
-    output wire         inst1_to_alu1,       // Route inst1 to ALU1
+    output              dispatch_inst0,      // Dispatch instruction 0
+    output              dispatch_inst1,      // Dispatch instruction 1
+    output              inst0_to_alu0,       // Route inst0 to ALU0
+    output              inst0_to_alu1,       // Route inst0 to ALU1
+    output              inst1_to_alu0,       // Route inst1 to ALU0
+    output              inst1_to_alu1,       // Route inst1 to ALU1
 
-    output wire         dual_issue,          // Both instructions issued
-    output wire         stall_dependency,    // Stall due to data dependency
-    output wire         stall_structural     // Stall due to resource conflict
+    output              dual_issue,          // Both instructions issued
+    output              stall_dependency,    // Stall due to data dependency
+    output              stall_structural     // Stall due to resource conflict
 );
 
 //------------------------------------------------------------------------------
@@ -143,16 +143,34 @@ wire inst0_must_single_issue = inst0_is_complex || inst0_is_branch || inst0_uses
 wire inst1_must_single_issue = inst1_is_complex || inst1_is_branch || inst1_uses_div;
 
 // Can we dispatch inst0?
+wire inst0_alu_ok;
+wire inst0_mult_ok;
+wire inst0_div_ok;
+wire inst0_mem_ok;
+
+assign inst0_alu_ok = inst0_uses_alu ? (alu0_available || alu1_available) : 1'b1;
+assign inst0_mult_ok = inst0_uses_mult ? mult_available : 1'b1;
+assign inst0_div_ok = inst0_uses_div ? div_available : 1'b1;
+assign inst0_mem_ok = inst0_uses_memory ? mem_available : 1'b1;
+
 wire can_dispatch_inst0;
 assign can_dispatch_inst0 =
     inst0_valid &&
     !inst0_has_dependency &&
-    (inst0_uses_alu ? (alu0_available || alu1_available) : 1'b1) &&
-    (inst0_uses_mult ? mult_available : 1'b1) &&
-    (inst0_uses_div ? div_available : 1'b1) &&
-    (inst0_uses_memory ? mem_available : 1'b1);
+    inst0_alu_ok &&
+    inst0_mult_ok &&
+    inst0_div_ok &&
+    inst0_mem_ok;
 
 // Can we dispatch inst1?
+wire inst1_alu_ok;
+wire inst1_mult_ok;
+wire inst1_mem_ok;
+
+assign inst1_alu_ok = inst1_uses_alu ? (alu0_available || alu1_available) : 1'b1;
+assign inst1_mult_ok = inst1_uses_mult ? mult_available : 1'b1;
+assign inst1_mem_ok = inst1_uses_memory ? mem_available : 1'b1;
+
 wire can_dispatch_inst1;
 assign can_dispatch_inst1 =
     inst1_valid &&
@@ -161,15 +179,14 @@ assign can_dispatch_inst1 =
     !inst0_must_single_issue &&
     !inst1_must_single_issue &&
     !resource_conflict &&
-    (inst1_uses_alu ? (alu0_available || alu1_available) : 1'b1) &&
-    (inst1_uses_mult ? mult_available : 1'b1) &&
-    (inst1_uses_memory ? mem_available : 1'b1);
+    inst1_alu_ok &&
+    inst1_mult_ok &&
+    inst1_mem_ok;
 
 // Dispatch decisions
-// NOTE: Use explicit 1'b0/1'b1 to avoid X propagation
-assign dispatch_inst0 = (rst_n == 1'b0) ? 1'b0 : can_dispatch_inst0;
-assign dispatch_inst1 = (rst_n == 1'b0) ? 1'b0 : (can_dispatch_inst0 && can_dispatch_inst1);
-assign dual_issue = (rst_n == 1'b0) ? 1'b0 : (dispatch_inst0 && dispatch_inst1);
+assign dispatch_inst0 = can_dispatch_inst0;
+assign dispatch_inst1 = can_dispatch_inst0 && can_dispatch_inst1;
+assign dual_issue = dispatch_inst0 && dispatch_inst1;
 
 //------------------------------------------------------------------------------
 // Execution Unit Assignment
