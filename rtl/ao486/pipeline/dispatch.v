@@ -77,10 +77,10 @@ module dispatch(
 wire raw_dependency_01;
 assign raw_dependency_01 =
     inst0_valid && inst1_valid &&
-    ((inst0_mutex[7:0] & inst1_mutex[7:0]) != 8'b0 ||  // Register overlap
-     (inst0_mutex[8] && inst1_mutex[8]) ||              // EFLAGS dependency
-     (inst0_mutex[9] && inst1_mutex[9]) ||              // Memory dependency
-     (inst0_mutex[11] && inst1_mutex[11]));             // I/O dependency
+    (|(inst0_mutex[7:0] & inst1_mutex[7:0]) ||      // Register overlap (reduction OR)
+     (inst0_mutex[8] && inst1_mutex[8]) ||          // EFLAGS dependency
+     (inst0_mutex[9] && inst1_mutex[9]) ||          // Memory dependency
+     (inst0_mutex[11] && inst1_mutex[11]));         // I/O dependency
 
 // Check dependencies with in-flight instructions
 wire [10:0] pipeline_mutex;
@@ -102,18 +102,18 @@ assign pipeline_mutex = exe0_mutex | exe1_mutex | wr0_mutex | wr1_mutex;
 wire inst0_has_dependency;
 assign inst0_has_dependency =
     inst0_valid &&
-    ((inst0_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||   // Register dependency
-     (inst0_mutex[8] && pipeline_mutex[8]) ||              // EFLAGS dependency
-     (inst0_mutex[9] && pipeline_mutex[9]) ||              // Memory dependency
-     (inst0_mutex[11] && pipeline_mutex[11]));             // I/O dependency
+    (|(inst0_mutex[7:0] & pipeline_mutex[7:0]) ||   // Register dependency (reduction OR)
+     (inst0_mutex[8] && pipeline_mutex[8]) ||       // EFLAGS dependency
+     (inst0_mutex[9] && pipeline_mutex[9]) ||       // Memory dependency
+     (inst0_mutex[11] && pipeline_mutex[11]));      // I/O dependency
 
 wire inst1_has_dependency;
 assign inst1_has_dependency =
     inst1_valid &&
-    ((inst1_mutex[7:0] & pipeline_mutex[7:0]) != 8'b0 ||   // Register dependency
-     (inst1_mutex[8] && pipeline_mutex[8]) ||              // EFLAGS dependency
-     (inst1_mutex[9] && pipeline_mutex[9]) ||              // Memory dependency
-     (inst1_mutex[11] && pipeline_mutex[11]));             // I/O dependency
+    (|(inst1_mutex[7:0] & pipeline_mutex[7:0]) ||   // Register dependency (reduction OR)
+     (inst1_mutex[8] && pipeline_mutex[8]) ||       // EFLAGS dependency
+     (inst1_mutex[9] && pipeline_mutex[9]) ||       // Memory dependency
+     (inst1_mutex[11] && pipeline_mutex[11]));      // I/O dependency
 
 //------------------------------------------------------------------------------
 // Resource Conflict Detection
