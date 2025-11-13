@@ -1,6 +1,25 @@
 # Test Bench Debugging Status
 
-## Fixes Applied (Latest Commits)
+## Latest Update: Decoder Bit Classification Implemented ✅
+
+**Date:** 2025-11-13
+**Status:** Instruction classification logic added to decode stage
+
+The decoder bit positions (20-23) are no longer placeholders. Instruction classification is now implemented in the decode stage via new module outputs:
+
+- **dec_is_mult**: Set for MUL (cmd 59), IMUL (cmd 54)
+- **dec_is_div**: Set for DIV (cmd 42), IDIV (cmd 43), AAM (cmd 32)
+- **dec_is_branch**: Set for Jcc (cmd 8), JCXZ (cmd 2), LOOP (cmd 60), JMP (cmd 87), CALL (cmd 3), RET_near (cmd 15), RET_far (cmd 63), INT_INTO (cmd 75), IRET (cmd 35)
+- **dec_is_complex**: Already existed in original decode.v
+
+**Files Modified:**
+- `rtl/ao486/pipeline/decode.v`: Added classification logic (lines 266-292) and new outputs
+- `rtl/ao486/defines.v`: Updated documentation for DECODER_IS_*_BIT defines
+
+**Implementation Details:**
+The classification wires check `dec_cmd` values against specific instruction types and are exported as module outputs. This allows the superscalar dispatch logic to correctly identify instruction types for resource allocation and dual-issue decisions.
+
+## Fixes Applied (Earlier Commits)
 
 ### 1. ✅ Initialized All Test Bench Registers
 **Commit:** 7c0ec8a

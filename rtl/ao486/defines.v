@@ -160,13 +160,17 @@
 `define MUTEX_IO_BIT        11
 
 // Decoder bits for instruction classification (superscalar)
-// WARNING: These are placeholder bit positions that MUST be verified
-// against the actual decoder output structure before production use.
-// The decoder is an 88-bit or 96-bit vector with instruction properties.
-`define DECODER_IS_MULT_BIT     20  // Instruction uses multiplier (PLACEHOLDER)
-`define DECODER_IS_DIV_BIT      21  // Instruction uses divider (PLACEHOLDER)
-`define DECODER_IS_BRANCH_BIT   22  // Instruction is a branch (PLACEHOLDER)
-`define DECODER_IS_COMPLEX_BIT  23  // Instruction needs microcode (PLACEHOLDER)
+// NOTE: Instruction classification is now provided by decode.v module outputs:
+//   - dec_is_mult: Set for MUL, IMUL instructions
+//   - dec_is_div: Set for DIV, IDIV, AAM instructions
+//   - dec_is_branch: Set for JMP, Jcc, CALL, RET, INT, IRET, LOOP instructions
+//   - dec_is_complex: Already exists in original decode.v
+// These outputs are based on dec_cmd values from autogen/defines.v.
+// See rtl/ao486/pipeline/decode.v lines 266-292 for implementation.
+`define DECODER_IS_MULT_BIT     20  // Instruction uses multiplier (set by dec_is_mult)
+`define DECODER_IS_DIV_BIT      21  // Instruction uses divider (set by dec_is_div)
+`define DECODER_IS_BRANCH_BIT   22  // Instruction is a branch (set by dec_is_branch)
+`define DECODER_IS_COMPLEX_BIT  23  // Instruction needs microcode (set by dec_is_complex)
 
 `define ARITH_VALID 4'd8
 

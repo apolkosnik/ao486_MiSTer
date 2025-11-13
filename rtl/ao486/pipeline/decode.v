@@ -68,11 +68,16 @@ module decode(
     output      [2:0]   dec_prefix_group_2_seg,
     output              dec_prefix_2byte,
     output      [3:0]   dec_consumed,
-    output      [2:0]   dec_modregrm_len,  
+    output      [2:0]   dec_modregrm_len,
     output              dec_is_8bit,
     output      [6:0]   dec_cmd,
     output      [3:0]   dec_cmdex,
-    output              dec_is_complex
+    output              dec_is_complex,
+
+    // Instruction classification for superscalar dispatch
+    output              dec_is_mult,
+    output              dec_is_div,
+    output              dec_is_branch
 );
 
 //------------------------------------------------------------------------------
@@ -225,7 +230,7 @@ wire dec_exception_ud;
 
 decode_commands decode_commands_inst(
     .protected_mode                 (protected_mode),               //input
-    
+
     .dec_ready_one                  (dec_ready_one),                //input
     .dec_ready_one_one              (dec_ready_one_one),            //input
     .dec_ready_one_two              (dec_ready_one_two),            //input
@@ -239,12 +244,12 @@ decode_commands decode_commands_inst(
     .dec_ready_mem_offset           (dec_ready_mem_offset),         //input
     .dec_ready_modregrm_imm         (dec_ready_modregrm_imm),       //input
     .dec_ready_2byte_modregrm_imm   (dec_ready_2byte_modregrm_imm), //input
-    
+
     .decoder                        (decoder),                      //input [95:0]
     .prefix_group_1_lock            (prefix_group_1_lock),          //input
     .dec_prefix_group_1_rep         (dec_prefix_group_1_rep),       //input [1:0]
     .dec_prefix_2byte               (dec_prefix_2byte),             //input
-    
+
     .consume_one                    (consume_one),                  //output
     .consume_one_one                (consume_one_one),              //output
     .consume_one_two                (consume_one_two),              //output
@@ -254,15 +259,42 @@ decode_commands decode_commands_inst(
     .consume_one_imm                (consume_one_imm),              //output
     .consume_modregrm_imm           (consume_modregrm_imm),         //output
     .consume_mem_offset             (consume_mem_offset),           //output
-    
+
     .dec_exception_ud               (dec_exception_ud),             //output
-    
+
     .dec_is_8bit                    (dec_is_8bit),                  //output
     .dec_cmd                        (dec_cmd),                      //output [6:0]
     .dec_cmdex                      (dec_cmdex),                    //output [3:0]
     .dec_is_complex                 (dec_is_complex)                //output
 );
 
+//------------------------------------------------------------------------------
+// Instruction classification for superscalar dispatch
+// Based on dec_cmd values from autogen/defines.v
+//------------------------------------------------------------------------------
+
+// Multiply instructions: MUL, IMUL
+wire dec_is_mult;
+assign dec_is_mult = (dec_cmd == 7'd59) ||  // CMD_MUL
+                     (dec_cmd == 7'd54);    // CMD_IMUL
+
+// Divide instructions: DIV, IDIV, AAM (uses divider)
+wire dec_is_div;
+assign dec_is_div = (dec_cmd == 7'd42) ||   // CMD_DIV
+                    (dec_cmd == 7'd43) ||   // CMD_IDIV
+                    (dec_cmd == 7'd32);     // CMD_AAM
+
+// Branch instructions: conditional jumps, unconditional jumps, calls, returns, interrupts
+wire dec_is_branch;
+assign dec_is_branch = (dec_cmd == 7'd8)  ||  // CMD_Jcc (conditional jump)
+                       (dec_cmd == 7'd2)  ||  // CMD_JCXZ
+                       (dec_cmd == 7'd60) ||  // CMD_LOOP
+                       (dec_cmd == 7'd87) ||  // CMD_JMP
+                       (dec_cmd == 7'd3)  ||  // CMD_CALL
+                       (dec_cmd == 7'd15) ||  // CMD_RET_near
+                       (dec_cmd == 7'd63) ||  // CMD_RET_far
+                       (dec_cmd == 7'd75) ||  // CMD_INT_INTO
+                       (dec_cmd == 7'd35);    // CMD_IRET
 
 //------------------------------------------------------------------------------
 

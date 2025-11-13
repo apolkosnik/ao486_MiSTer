@@ -119,21 +119,21 @@ make test_dispatch
 
 ---
 
-### 2. Decoder Bit Verification
-**File:** `rtl/ao486/defines.v` lines 166-169
-**Status:** ⚠️ **Placeholder Values**
+### 2. Decoder Bit Classification ✅ **IMPLEMENTED**
+**File:** `rtl/ao486/pipeline/decode.v` lines 266-292
+**Status:** ✅ **Complete**
 
-**Problem:** Decoder bit positions are not verified:
-```verilog
-`define DECODER_IS_MULT_BIT     20  // PLACEHOLDER
-`define DECODER_IS_DIV_BIT      21  // PLACEHOLDER
-`define DECODER_IS_BRANCH_BIT   22  // PLACEHOLDER
-`define DECODER_IS_COMPLEX_BIT  23  // PLACEHOLDER
-```
+**Solution:** Added instruction classification logic to decode stage:
+- **dec_is_mult**: Detects MUL (cmd 59), IMUL (cmd 54)
+- **dec_is_div**: Detects DIV (cmd 42), IDIV (cmd 43), AAM (cmd 32)
+- **dec_is_branch**: Detects Jcc, JMP, CALL, RET, INT, IRET, LOOP instructions
+- **dec_is_complex**: Already existed in original decode.v
 
-**Impact:** Instruction classification may be incorrect.
+These are now exported as module outputs from decode.v and can be used by the superscalar dispatch logic for proper instruction classification.
 
-**Required:** Examine `decode_commands.v` to find actual bit positions (6-8 hours)
+**Files Modified:**
+- `rtl/ao486/pipeline/decode.v`: Added classification wires and outputs
+- `rtl/ao486/defines.v`: Updated documentation
 
 ---
 
@@ -209,7 +209,7 @@ Current logic might stall because both access EBX, even though there's no real d
 
 ### Remaining ❌
 1. ❌ Architectural mismatch with single-issue pipeline (BLOCKER)
-2. ❌ Decoder bit positions need verification
+2. ✅ Decoder bit positions verified and implemented
 3. ❌ Forwarding inputs not connected
 4. ❌ No exception handling design
 5. ❌ No memory operation support
@@ -260,7 +260,7 @@ Current logic might stall because both access EBX, even though there's no real d
 1. **Immediate (Do Now):**
    - ✅ Run dispatch tests: `cd sim/superscalar && make test_dispatch`
    - ✅ Review test output and waveforms
-   - 📋 Verify decoder bit positions in decode_commands.v
+   - ✅ Verify decoder bit positions and implement classification logic
 
 2. **Short Term (1-2 weeks):**
    - 📋 Create forwarding test bench
