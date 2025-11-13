@@ -503,6 +503,11 @@ wire [6:0]  dec_cmd;
 wire [3:0]  dec_cmdex;
 wire        dec_is_complex;
 
+// Instruction classification for superscalar dispatch
+wire        dec_is_mult;
+wire        dec_is_div;
+wire        dec_is_branch;
+
 wire [6:0]  micro_cmd;
 wire [6:0]  rd_cmd;
 
@@ -552,7 +557,12 @@ decode decode_inst(
     .dec_is_8bit                (dec_is_8bit),              //output
     .dec_cmd                    (dec_cmd),                  //output [6:0]
     .dec_cmdex                  (dec_cmdex),                //output [3:0]
-    .dec_is_complex             (dec_is_complex)            //output
+    .dec_is_complex             (dec_is_complex),           //output
+
+    // Instruction classification for superscalar dispatch
+    .dec_is_mult                (dec_is_mult),              //output
+    .dec_is_div                 (dec_is_div),               //output
+    .dec_is_branch              (dec_is_branch)             //output
 );
 
 //------------------------------------------------------------------------------
