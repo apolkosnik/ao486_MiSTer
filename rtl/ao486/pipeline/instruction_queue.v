@@ -17,25 +17,16 @@ module instruction_queue(
 
     input               queue_reset,
 
-    // Input from READ stage
-    input               rd_valid,
+    // Input from READ stage (only signals that actually exist)
+    input               rd_ready,           // Instruction valid from READ stage
     input       [6:0]   rd_cmd,
     input       [3:0]   rd_cmdex,
-    input       [10:0]  rd_mutex,
-    input       [31:0]  rd_src,
-    input       [31:0]  rd_dst,
+    input       [10:0]  rd_mutex_next,      // Actual signal name from READ stage
+    input       [31:0]  src_wire,           // Source operand from READ stage
+    input       [31:0]  dst_wire,           // Destination operand from READ stage
     input               rd_is_8bit,
     input               rd_dst_is_reg,
-    input       [2:0]   rd_dst_reg,
-    input               rd_uses_alu,
-    input               rd_uses_mult,
-    input               rd_uses_div,
-    input               rd_uses_memory,
-    input               rd_is_branch,
-    input               rd_is_complex,
-
-    // Stall signal from execute
-    input               exe_busy,
+    input               rd_dst_is_memory,
 
     // Outputs for dispatch (head of queue - inst0)
     output              inst0_valid,
@@ -46,13 +37,7 @@ module instruction_queue(
     output      [31:0]  inst0_dst,
     output              inst0_is_8bit,
     output              inst0_dst_is_reg,
-    output      [2:0]   inst0_dst_reg,
-    output              inst0_uses_alu,
-    output              inst0_uses_mult,
-    output              inst0_uses_div,
-    output              inst0_uses_memory,
-    output              inst0_is_branch,
-    output              inst0_is_complex,
+    output              inst0_dst_is_memory,
 
     // Outputs for dispatch (second in queue - inst1)
     output              inst1_valid,
@@ -63,13 +48,7 @@ module instruction_queue(
     output      [31:0]  inst1_dst,
     output              inst1_is_8bit,
     output              inst1_dst_is_reg,
-    output      [2:0]   inst1_dst_reg,
-    output              inst1_uses_alu,
-    output              inst1_uses_mult,
-    output              inst1_uses_div,
-    output              inst1_uses_memory,
-    output              inst1_is_branch,
-    output              inst1_is_complex,
+    output              inst1_dst_is_memory,
 
     // Control signals
     input               dispatch_inst0,     // Dispatch consumed inst0
@@ -93,13 +72,7 @@ reg [31:0]  src [0:3];
 reg [31:0]  dst [0:3];
 reg         is_8bit [0:3];
 reg         dst_is_reg [0:3];
-reg [2:0]   dst_reg [0:3];
-reg         uses_alu [0:3];
-reg         uses_mult [0:3];
-reg         uses_div [0:3];
-reg         uses_memory [0:3];
-reg         is_branch [0:3];
-reg         is_complex [0:3];
+reg         dst_is_memory [0:3];
 
 // Queue pointers
 reg [2:0]   head;           // Next instruction to dispatch
@@ -126,13 +99,7 @@ assign inst0_src         = src[head[1:0]];
 assign inst0_dst         = dst[head[1:0]];
 assign inst0_is_8bit     = is_8bit[head[1:0]];
 assign inst0_dst_is_reg  = dst_is_reg[head[1:0]];
-assign inst0_dst_reg     = dst_reg[head[1:0]];
-assign inst0_uses_alu    = uses_alu[head[1:0]];
-assign inst0_uses_mult   = uses_mult[head[1:0]];
-assign inst0_uses_div    = uses_div[head[1:0]];
-assign inst0_uses_memory = uses_memory[head[1:0]];
-assign inst0_is_branch   = is_branch[head[1:0]];
-assign inst0_is_complex  = is_complex[head[1:0]];
+assign inst0_dst_is_memory = dst_is_memory[head[1:0]];
 
 // Second in queue (head + 1)
 wire [1:0] head_plus_1 = head[1:0] + 2'd1;
@@ -145,19 +112,13 @@ assign inst1_src         = src[head_plus_1];
 assign inst1_dst         = dst[head_plus_1];
 assign inst1_is_8bit     = is_8bit[head_plus_1];
 assign inst1_dst_is_reg  = dst_is_reg[head_plus_1];
-assign inst1_dst_reg     = dst_reg[head_plus_1];
-assign inst1_uses_alu    = uses_alu[head_plus_1];
-assign inst1_uses_mult   = uses_mult[head_plus_1];
-assign inst1_uses_div    = uses_div[head_plus_1];
-assign inst1_uses_memory = uses_memory[head_plus_1];
-assign inst1_is_branch   = is_branch[head_plus_1];
-assign inst1_is_complex  = is_complex[head_plus_1];
+assign inst1_dst_is_memory = dst_is_memory[head_plus_1];
 
 //------------------------------------------------------------------------------
 // Queue Management Logic
 //------------------------------------------------------------------------------
 
-wire enqueue = rd_valid && !queue_full;
+wire enqueue = rd_ready && !queue_full;
 wire dequeue_count = {1'b0, dispatch_inst0} + {1'b0, dispatch_inst1};
 
 integer i;
@@ -173,13 +134,7 @@ always @(posedge clk) begin
             dst[i] <= 32'd0;
             is_8bit[i] <= 1'b0;
             dst_is_reg[i] <= 1'b0;
-            dst_reg[i] <= 3'd0;
-            uses_alu[i] <= 1'b0;
-            uses_mult[i] <= 1'b0;
-            uses_div[i] <= 1'b0;
-            uses_memory[i] <= 1'b0;
-            is_branch[i] <= 1'b0;
-            is_complex[i] <= 1'b0;
+            dst_is_memory[i] <= 1'b0;
         end
         head <= 3'd0;
         tail <= 3'd0;
@@ -188,21 +143,15 @@ always @(posedge clk) begin
     else begin
         // Enqueue from READ stage
         if (enqueue) begin
-            valid[tail[1:0]]       <= 1'b1;
-            cmd[tail[1:0]]         <= rd_cmd;
-            cmdex[tail[1:0]]       <= rd_cmdex;
-            mutex[tail[1:0]]       <= rd_mutex;
-            src[tail[1:0]]         <= rd_src;
-            dst[tail[1:0]]         <= rd_dst;
-            is_8bit[tail[1:0]]     <= rd_is_8bit;
-            dst_is_reg[tail[1:0]]  <= rd_dst_is_reg;
-            dst_reg[tail[1:0]]     <= rd_dst_reg;
-            uses_alu[tail[1:0]]    <= rd_uses_alu;
-            uses_mult[tail[1:0]]   <= rd_uses_mult;
-            uses_div[tail[1:0]]    <= rd_uses_div;
-            uses_memory[tail[1:0]] <= rd_uses_memory;
-            is_branch[tail[1:0]]   <= rd_is_branch;
-            is_complex[tail[1:0]]  <= rd_is_complex;
+            valid[tail[1:0]]         <= 1'b1;
+            cmd[tail[1:0]]           <= rd_cmd;
+            cmdex[tail[1:0]]         <= rd_cmdex;
+            mutex[tail[1:0]]         <= rd_mutex_next;
+            src[tail[1:0]]           <= src_wire;
+            dst[tail[1:0]]           <= dst_wire;
+            is_8bit[tail[1:0]]       <= rd_is_8bit;
+            dst_is_reg[tail[1:0]]    <= rd_dst_is_reg;
+            dst_is_memory[tail[1:0]] <= rd_dst_is_memory;
         end
 
         // Update pointers and count
