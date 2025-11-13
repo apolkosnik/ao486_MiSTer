@@ -119,20 +119,27 @@ make test_dispatch
 
 ---
 
-### 2. Decoder Bit Classification ✅ **IMPLEMENTED**
-**File:** `rtl/ao486/pipeline/decode.v` lines 266-292
+### 2. Decoder Bit Classification ✅ **IMPLEMENTED & CONNECTED**
+**Files:**
+- `rtl/ao486/pipeline/decode.v` lines 266-292
+- `rtl/ao486/pipeline/pipeline.v` lines 507-509, 563-565
 **Status:** ✅ **Complete**
 
-**Solution:** Added instruction classification logic to decode stage:
+**Solution:** Added instruction classification logic to decode stage and connected through pipeline:
 - **dec_is_mult**: Detects MUL (cmd 59), IMUL (cmd 54)
 - **dec_is_div**: Detects DIV (cmd 42), IDIV (cmd 43), AAM (cmd 32)
 - **dec_is_branch**: Detects Jcc, JMP, CALL, RET, INT, IRET, LOOP instructions
 - **dec_is_complex**: Already existed in original decode.v
 
-These are now exported as module outputs from decode.v and can be used by the superscalar dispatch logic for proper instruction classification.
+**Implementation:**
+1. Classification wires in decode.v check dec_cmd values
+2. Exported as decode module outputs
+3. Connected through pipeline.v as internal wires
+4. Available for routing to superscalar dispatch when integrated
 
 **Files Modified:**
 - `rtl/ao486/pipeline/decode.v`: Added classification wires and outputs
+- `rtl/ao486/pipeline/pipeline.v`: Added wire declarations and decode instantiation connections
 - `rtl/ao486/defines.v`: Updated documentation
 
 ---
