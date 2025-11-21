@@ -6,9 +6,10 @@ Comprehensive test suite for validating the ao486 dual-issue superscalar impleme
 
 This directory contains unit tests and integration tests for the superscalar components:
 
-- **tb_instruction_queue.v** - Tests for 4-entry instruction FIFO queue
-- **tb_dispatch.v** - Tests for dual-issue dispatch logic
-- More tests coming soon...
+- **tb_instruction_queue.v** - Tests for 4-entry instruction FIFO queue (24 tests)
+- **tb_dispatch.v** - Tests for dual-issue dispatch logic (27 tests)
+- **tb_dual_execute.v** - Tests for dual ALU execution units (22 tests)
+- **tb_writeback.v** - Tests for dual write port register file (22 tests)
 
 ## Requirements
 
@@ -50,12 +51,24 @@ make test_queue
 make test_dispatch
 ```
 
+**Dual Execute:**
+```bash
+make test_execute
+```
+
+**Dual Writeback:**
+```bash
+make test_writeback
+```
+
 ### View Waveforms
 
 After running tests, view waveforms in GTKWave:
 ```bash
 make view_queue     # View instruction queue waveforms
 make view_dispatch  # View dispatch waveforms
+make view_execute   # View dual execute waveforms
+make view_writeback # View writeback waveforms
 ```
 
 Or manually:
@@ -82,9 +95,28 @@ gtkwave tb_instruction_queue.vcd &
 - [x] Test 2.6: Structural hazards (ALU busy)
 - [x] Test 2.7: WAW hazard detection
 
+#### ✅ Dual Execute (tb_dual_execute.v)
+- [x] Test 3.1: Dual ALU operations in parallel
+- [x] Test 3.2: ALU0 single-issue
+- [x] Test 3.3: ALU1 single-issue
+- [x] Test 3.4: Bitwise operations (AND, OR)
+- [x] Test 3.5: XOR operation
+- [x] Test 3.6: Busy state tracking
+- [x] Test 3.7: Zero operands
+- [x] Test 3.8: Large numbers and overflow
+- [x] Test 3.9: Shared multiplier access
+
+#### ✅ Writeback (tb_writeback.v)
+- [x] Test 4.1: Dual writeback to different registers
+- [x] Test 4.2: Write priority (Port 0 > Port 1)
+- [x] Test 4.3: Port 0 only
+- [x] Test 4.4: Port 1 only
+- [x] Test 4.5: All 8 registers via Port 1
+- [x] Test 4.6: ESP exception restore priority
+- [x] Test 4.7: Sequential dual writes
+- [x] Test 4.8: Register overwrite
+
 #### 🔄 Coming Soon
-- [ ] Dual Execute Tests (tb_dual_execute.v)
-- [ ] Writeback Tests (tb_writeback.v)
 - [ ] Integration Tests (tb_integration.v)
 - [ ] Exception Handling Tests
 - [ ] Performance Measurement Tests
@@ -140,6 +172,18 @@ ALL TESTS PASSED!
 - Dependencies should prevent dual-issue
 - Independent instructions should dual-issue
 - Branches should serialize (no dual-issue)
+
+### Dual Execute
+- All 22 tests should pass
+- Both ALUs should execute in parallel
+- Results should be correct for ADD, SUB, AND, OR, XOR
+- Multiplier should be shared correctly
+
+### Dual Writeback
+- All 22 tests should pass
+- Both write ports should update registers in same cycle
+- Port 0 should take priority over Port 1
+- Exception restore should override Port 1 writes
 
 ## File Structure
 
@@ -201,5 +245,6 @@ When adding new tests:
 ## Status
 
 **Last Updated**: 2025-11-21
-**Status**: Unit tests for Queue and Dispatch complete
-**Next**: Dual execute and writeback tests
+**Status**: Unit tests complete for all 4 core components (95 total tests)
+**Coverage**: Queue (24), Dispatch (27), Execute (22), Writeback (22)
+**Next**: Integration tests and performance measurement
