@@ -1016,13 +1016,12 @@ assign inst1_uses_alu = inst1_valid && !inst1_uses_mult && !inst1_uses_div &&
 // Resource Availability Tracking
 //------------------------------------------------------------------------------
 
-// For initial implementation, assume resources are available
-// (Will be refined when execute stages are integrated)
-wire alu0_available = 1'b1;
-wire alu1_available = 1'b1;
-wire mult_available = 1'b1;
-wire div_available = 1'b1;
-wire mem_available = 1'b1;
+// Resource availability (will be assigned after dual_execute instantiation)
+wire alu0_available;
+wire alu1_available;
+wire mult_available;
+wire div_available;
+wire mem_available = 1'b1;  // Memory availability placeholder
 
 wire alu0_busy_w = !alu0_available;
 wire alu1_busy_w = !alu1_available;
@@ -1096,6 +1095,163 @@ dispatch dispatch_inst(
     .stall_dependency   (stall_dependency),
     .stall_structural   (stall_structural)
 );
+
+//------------------------------------------------------------------------------
+// Dual Execution Units (ALU0 and ALU1) for Parallel Execution
+//------------------------------------------------------------------------------
+
+// Routing logic: Send instructions to ALU0 or ALU1 based on dispatch decisions
+wire alu0_valid_dual;
+wire [6:0] alu0_cmd_dual;
+wire [3:0] alu0_cmdex_dual;
+wire [31:0] alu0_src_dual;
+wire [31:0] alu0_dst_dual;
+wire alu0_is_8bit_dual;
+
+wire alu1_valid_dual;
+wire [6:0] alu1_cmd_dual;
+wire [3:0] alu1_cmdex_dual;
+wire [31:0] alu1_src_dual;
+wire [31:0] alu1_dst_dual;
+wire alu1_is_8bit_dual;
+
+// Route inst0 to ALU0 or inst1 to ALU0
+assign alu0_valid_dual = (dispatch_inst0 && inst0_to_alu0) ||
+                         (dispatch_inst1 && inst1_to_alu0);
+
+assign alu0_cmd_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_cmd_q :
+                       (dispatch_inst1 && inst1_to_alu0) ? inst1_cmd_q : 7'd0;
+
+assign alu0_cmdex_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_cmdex_q :
+                         (dispatch_inst1 && inst1_to_alu0) ? inst1_cmdex_q : 4'd0;
+
+assign alu0_src_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_src_q :
+                       (dispatch_inst1 && inst1_to_alu0) ? inst1_src_q : 32'd0;
+
+assign alu0_dst_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_dst_q :
+                       (dispatch_inst1 && inst1_to_alu0) ? inst1_dst_q : 32'd0;
+
+assign alu0_is_8bit_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_is_8bit_q :
+                           (dispatch_inst1 && inst1_to_alu0) ? inst1_is_8bit_q : 1'b0;
+
+// Route inst0 to ALU1 or inst1 to ALU1
+assign alu1_valid_dual = (dispatch_inst0 && inst0_to_alu1) ||
+                         (dispatch_inst1 && inst1_to_alu1);
+
+assign alu1_cmd_dual = (dispatch_inst0 && inst0_to_alu1) ? inst0_cmd_q :
+                       (dispatch_inst1 && inst1_to_alu1) ? inst1_cmd_q : 7'd0;
+
+assign alu1_cmdex_dual = (dispatch_inst0 && inst0_to_alu1) ? inst0_cmdex_q :
+                         (dispatch_inst1 && inst1_to_alu1) ? inst1_cmdex_q : 4'd0;
+
+assign alu1_src_dual = (dispatch_inst0 && inst0_to_alu1) ? inst0_src_q :
+                       (dispatch_inst1 && inst1_to_alu1) ? inst1_src_q : 32'd0;
+
+assign alu1_dst_dual = (dispatch_inst0 && inst0_to_alu1) ? inst0_dst_q :
+                       (dispatch_inst1 && inst1_to_alu1) ? inst1_dst_q : 32'd0;
+
+assign alu1_is_8bit_dual = (dispatch_inst0 && inst0_to_alu1) ? inst0_is_8bit_q :
+                           (dispatch_inst1 && inst1_to_alu1) ? inst1_is_8bit_q : 1'b0;
+
+// Dual execution unit outputs
+wire        alu0_busy_dual;
+wire        alu0_ready_dual;
+wire [31:0] alu0_result_dual;
+wire [31:0] alu0_result2_dual;
+wire [4:0]  alu0_result_signals_dual;
+wire        alu0_exception_dual;
+
+wire        alu1_busy_dual;
+wire        alu1_ready_dual;
+wire [31:0] alu1_result_dual;
+wire [31:0] alu1_result2_dual;
+wire [4:0]  alu1_result_signals_dual;
+wire        alu1_exception_dual;
+
+wire        mult_div_busy;
+wire [31:0] mult_div_result;
+wire [31:0] mult_div_result2;
+wire        mult_div_exception;
+
+dual_execute dual_execute_inst(
+    .clk                (clk),
+    .rst_n              (rst_n),
+    .exe_reset          (exe_reset),
+
+    // Shared resources - connect to register file
+    .eax                (eax),
+    .ecx                (ecx),
+    .edx                (edx),
+    .ebp                (ebp),
+    .esp                (esp),
+    .ebx                (ebx),
+    .esi                (esi),
+    .edi                (edi),
+
+    // Flags
+    .cflag              (cflag),
+    .pflag              (pflag),
+    .aflag              (aflag),
+    .zflag              (zflag),
+    .sflag              (sflag),
+    .oflag              (oflag),
+    .dflag              (dflag),
+    .tflag              (tflag),
+    .iflag              (iflag),
+
+    .cpl                (cpl),
+    .real_mode          (real_mode),
+    .v8086_mode         (v8086_mode),
+    .protected_mode     (protected_mode),
+
+    // ALU0 inputs (from routing logic)
+    .alu0_valid         (alu0_valid_dual),
+    .alu0_cmd           (alu0_cmd_dual),
+    .alu0_cmdex         (alu0_cmdex_dual),
+    .alu0_src           (alu0_src_dual),
+    .alu0_dst           (alu0_dst_dual),
+    .alu0_is_8bit       (alu0_is_8bit_dual),
+    .alu0_uses_mult     (inst0_uses_mult && inst0_to_alu0),
+    .alu0_uses_div      (inst0_uses_div && inst0_to_alu0),
+
+    // ALU0 outputs
+    .alu0_busy          (alu0_busy_dual),
+    .alu0_ready         (alu0_ready_dual),
+    .alu0_result        (alu0_result_dual),
+    .alu0_result2       (alu0_result2_dual),
+    .alu0_result_signals(alu0_result_signals_dual),
+    .alu0_exception     (alu0_exception_dual),
+
+    // ALU1 inputs (from routing logic)
+    .alu1_valid         (alu1_valid_dual),
+    .alu1_cmd           (alu1_cmd_dual),
+    .alu1_cmdex         (alu1_cmdex_dual),
+    .alu1_src           (alu1_src_dual),
+    .alu1_dst           (alu1_dst_dual),
+    .alu1_is_8bit       (alu1_is_8bit_dual),
+    .alu1_uses_mult     ((inst0_uses_mult && inst0_to_alu1) || (inst1_uses_mult && inst1_to_alu1)),
+    .alu1_uses_div      ((inst0_uses_div && inst0_to_alu1) || (inst1_uses_div && inst1_to_alu1)),
+
+    // ALU1 outputs
+    .alu1_busy          (alu1_busy_dual),
+    .alu1_ready         (alu1_ready_dual),
+    .alu1_result        (alu1_result_dual),
+    .alu1_result2       (alu1_result2_dual),
+    .alu1_result_signals(alu1_result_signals_dual),
+    .alu1_exception     (alu1_exception_dual),
+
+    // Shared multiplier/divider
+    .mult_div_busy      (mult_div_busy),
+    .mult_div_result    (mult_div_result),
+    .mult_div_result2   (mult_div_result2),
+    .mult_div_exception (mult_div_exception)
+);
+
+// Update resource availability based on actual ALU state
+assign alu0_available = !alu0_busy_dual;
+assign alu1_available = !alu1_busy_dual;
+assign mult_available = !mult_div_busy;
+assign div_available = !mult_div_busy;
 
 //------------------------------------------------------------------------------
 
