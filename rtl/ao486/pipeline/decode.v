@@ -274,18 +274,18 @@ decode_commands decode_commands_inst(
 //------------------------------------------------------------------------------
 
 // Multiply instructions: MUL, IMUL
-wire dec_is_mult;
+// Note: dec_is_mult is already declared as output in port list
 assign dec_is_mult = (dec_cmd == 7'd59) ||  // CMD_MUL
                      (dec_cmd == 7'd54);    // CMD_IMUL
 
 // Divide instructions: DIV, IDIV, AAM (uses divider)
-wire dec_is_div;
+// Note: dec_is_div is already declared as output in port list
 assign dec_is_div = (dec_cmd == 7'd42) ||   // CMD_DIV
                     (dec_cmd == 7'd43) ||   // CMD_IDIV
                     (dec_cmd == 7'd32);     // CMD_AAM
 
 // Branch instructions: conditional jumps, unconditional jumps, calls, returns, interrupts
-wire dec_is_branch;
+// Note: dec_is_branch is already declared as output in port list
 assign dec_is_branch = (dec_cmd == 7'd8)  ||  // CMD_Jcc (conditional jump)
                        (dec_cmd == 7'd2)  ||  // CMD_JCXZ
                        (dec_cmd == 7'd60) ||  // CMD_LOOP
