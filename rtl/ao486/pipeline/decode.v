@@ -270,31 +270,31 @@ decode_commands decode_commands_inst(
 
 //------------------------------------------------------------------------------
 // Instruction classification for superscalar dispatch
-// Based on dec_cmd values from autogen/defines.v
+// Uses CMD_ defines from autogen/defines.v (included via defines.v)
 //------------------------------------------------------------------------------
 
 // Multiply instructions: MUL, IMUL
 // Note: dec_is_mult is already declared as output in port list
-assign dec_is_mult = (dec_cmd == 7'd59) ||  // CMD_MUL
-                     (dec_cmd == 7'd54);    // CMD_IMUL
+assign dec_is_mult = (dec_cmd == `CMD_MUL) ||
+                     (dec_cmd == `CMD_IMUL);
 
 // Divide instructions: DIV, IDIV, AAM (uses divider)
 // Note: dec_is_div is already declared as output in port list
-assign dec_is_div = (dec_cmd == 7'd42) ||   // CMD_DIV
-                    (dec_cmd == 7'd43) ||   // CMD_IDIV
-                    (dec_cmd == 7'd32);     // CMD_AAM
+assign dec_is_div = (dec_cmd == `CMD_DIV) ||
+                    (dec_cmd == `CMD_IDIV) ||
+                    (dec_cmd == `CMD_AAM);
 
 // Branch instructions: conditional jumps, unconditional jumps, calls, returns, interrupts
 // Note: dec_is_branch is already declared as output in port list
-assign dec_is_branch = (dec_cmd == 7'd8)  ||  // CMD_Jcc (conditional jump)
-                       (dec_cmd == 7'd2)  ||  // CMD_JCXZ
-                       (dec_cmd == 7'd60) ||  // CMD_LOOP
-                       (dec_cmd == 7'd87) ||  // CMD_JMP
-                       (dec_cmd == 7'd3)  ||  // CMD_CALL
-                       (dec_cmd == 7'd15) ||  // CMD_RET_near
-                       (dec_cmd == 7'd63) ||  // CMD_RET_far
-                       (dec_cmd == 7'd75) ||  // CMD_INT_INTO
-                       (dec_cmd == 7'd35);    // CMD_IRET
+assign dec_is_branch = (dec_cmd == `CMD_Jcc) ||
+                       (dec_cmd == `CMD_JCXZ) ||
+                       (dec_cmd == `CMD_LOOP) ||
+                       (dec_cmd == `CMD_JMP) ||
+                       (dec_cmd == `CMD_CALL) ||
+                       (dec_cmd == `CMD_RET_near) ||
+                       (dec_cmd == `CMD_RET_far) ||
+                       (dec_cmd == `CMD_INT_INTO) ||
+                       (dec_cmd == `CMD_IRET);
 
 //------------------------------------------------------------------------------
 
