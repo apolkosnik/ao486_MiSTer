@@ -1285,12 +1285,28 @@ wire alu1_dst_is_reg_next = (inst0_to_alu1 && inst0_dst_is_reg_q) ||
                              (inst1_to_alu1 && inst1_dst_is_reg_q);
 
 // Pipeline ALU1 destination info alongside execution
+// PHASE 5: Exception priority and pipeline control
 always @(posedge clk) begin
     if (rst_n == 1'b0) begin
         alu1_dst_reg_r <= 3'd0;
         alu1_dst_is_reg_r <= 1'b0;
         alu1_valid_r <= 1'b0;
         alu1_result_r <= 32'd0;
+    end
+    else if (exe_reset || wr_reset) begin
+        // Pipeline flush: Invalidate ALU1 writeback to prevent inst1 from
+        // committing when pipeline flushes occur.
+        //
+        // Cases handled:
+        // 1. exe_reset: Exception in ALU0 (inst0) prevents inst1 commit
+        // 2. exe_reset: Branch misprediction flushes both instructions
+        // 3. wr_reset: Write stage exception prevents stale writeback
+        //
+        // This implements exception priority: inst0 > inst1
+        // Dispatch already serializes branches (inst0_is_branch -> single-issue)
+        // so branch mispredictions are rare in dual-issue scenarios.
+        alu1_valid_r <= 1'b0;
+        // Keep destination tracking for debugging, but result won't commit
     end
     else begin
         // Capture destination when ALU1 starts executing
