@@ -1653,7 +1653,19 @@ write write_inst(
     .exc_restore_esp               (exc_restore_esp),               //input
     .exc_push_error                (exc_push_error),                //input
     .exc_eip                       (exc_eip),                       //input [31:0]
-    
+
+    //ALU1 write port (from dual-issue execution)
+    .wr1_valid                     (alu1_valid_r),                  //input
+    .wr1_result                    (alu1_result_r),                 //input [31:0]
+    .wr1_eax                       (alu1_wr_eax),                   //input
+    .wr1_ecx                       (alu1_wr_ecx),                   //input
+    .wr1_edx                       (alu1_wr_edx),                   //input
+    .wr1_ebx                       (alu1_wr_ebx),                   //input
+    .wr1_esp                       (alu1_wr_esp),                   //input
+    .wr1_ebp                       (alu1_wr_ebp),                   //input
+    .wr1_esi                       (alu1_wr_esi),                   //input
+    .wr1_edi                       (alu1_wr_edi),                   //input
+
     //output
     .real_mode                     (real_mode),                     //output
     .v8086_mode                    (v8086_mode),                    //output

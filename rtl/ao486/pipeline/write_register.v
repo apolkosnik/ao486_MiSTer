@@ -91,16 +91,28 @@ module write_register(
     //write reg
     input               write_eax,
     input               write_regrm,
-                                   
+
     //write reg options
     input               wr_dst_is_rm,
     input               wr_dst_is_reg,
     input               wr_dst_is_implicit_reg,
     input               wr_regrm_word,
     input               wr_regrm_dword,
-    
+
     //write reg data
     input       [31:0]  result,
+
+    //write port 1 (from ALU1 for dual-issue)
+    input               wr1_valid,
+    input       [31:0]  wr1_result,
+    input               wr1_eax,
+    input               wr1_ecx,
+    input               wr1_edx,
+    input               wr1_ebx,
+    input               wr1_esp,
+    input               wr1_ebp,
+    input               wr1_esi,
+    input               wr1_edi,
    
     //output
     output      [1:0]   cpl,
@@ -408,15 +420,98 @@ assign esp_value =
 
 //------------------------------------------------------------------------------ general registers
 
+// Dual write port support: Port 0 (w_write_regrm) takes priority over Port 1 (wr1_*)
+// This prevents conflicts if dispatch incorrectly issues both to same register
 
-always @(posedge clk) begin if(rst_n == 1'b0) eax <= `STARTUP_EAX; else if(w_write_regrm) eax <= eax_value;                                              else eax <= eax_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) ebx <= `STARTUP_EBX; else if(w_write_regrm) ebx <= ebx_value;                                              else ebx <= ebx_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) ecx <= `STARTUP_ECX; else if(w_write_regrm) ecx <= ecx_value;                                              else ecx <= ecx_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) edx <= `STARTUP_EDX; else if(w_write_regrm) edx <= edx_value;                                              else edx <= edx_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) esi <= `STARTUP_ESI; else if(w_write_regrm) esi <= esi_value;                                              else esi <= esi_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) edi <= `STARTUP_EDI; else if(w_write_regrm) edi <= edi_value;                                              else edi <= edi_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) ebp <= `STARTUP_EBP; else if(w_write_regrm) ebp <= ebp_value;                                              else ebp <= ebp_to_reg; end
-always @(posedge clk) begin if(rst_n == 1'b0) esp <= `STARTUP_ESP; else if(w_write_regrm) esp <= esp_value; else if(exc_restore_esp) esp <= wr_esp_prev; else esp <= esp_to_reg; end
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        eax <= `STARTUP_EAX;
+    else if(w_write_regrm)
+        eax <= eax_value;
+    else if(wr1_valid && wr1_eax)
+        eax <= wr1_result;
+    else
+        eax <= eax_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        ebx <= `STARTUP_EBX;
+    else if(w_write_regrm)
+        ebx <= ebx_value;
+    else if(wr1_valid && wr1_ebx)
+        ebx <= wr1_result;
+    else
+        ebx <= ebx_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        ecx <= `STARTUP_ECX;
+    else if(w_write_regrm)
+        ecx <= ecx_value;
+    else if(wr1_valid && wr1_ecx)
+        ecx <= wr1_result;
+    else
+        ecx <= ecx_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        edx <= `STARTUP_EDX;
+    else if(w_write_regrm)
+        edx <= edx_value;
+    else if(wr1_valid && wr1_edx)
+        edx <= wr1_result;
+    else
+        edx <= edx_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        esi <= `STARTUP_ESI;
+    else if(w_write_regrm)
+        esi <= esi_value;
+    else if(wr1_valid && wr1_esi)
+        esi <= wr1_result;
+    else
+        esi <= esi_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        edi <= `STARTUP_EDI;
+    else if(w_write_regrm)
+        edi <= edi_value;
+    else if(wr1_valid && wr1_edi)
+        edi <= wr1_result;
+    else
+        edi <= edi_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        ebp <= `STARTUP_EBP;
+    else if(w_write_regrm)
+        ebp <= ebp_value;
+    else if(wr1_valid && wr1_ebp)
+        ebp <= wr1_result;
+    else
+        ebp <= ebp_to_reg;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)
+        esp <= `STARTUP_ESP;
+    else if(w_write_regrm)
+        esp <= esp_value;
+    else if(exc_restore_esp)
+        esp <= wr_esp_prev;
+    else if(wr1_valid && wr1_esp)
+        esp <= wr1_result;
+    else
+        esp <= esp_to_reg;
+end
 
 //------------------------------------------------------------------------------ control registers
 
