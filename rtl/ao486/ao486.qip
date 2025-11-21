@@ -1,5 +1,8 @@
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/condition.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/decode.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/instruction_queue.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/dispatch.v ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/dual_execute.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/decode_commands.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/decode_prefix.v ]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pipeline/decode_ready.v ]
