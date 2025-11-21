@@ -75,9 +75,9 @@ module decode(
     output              dec_is_complex,
 
     // Instruction classification for superscalar dispatch
-    output              dec_is_mult,
-    output              dec_is_div,
-    output              dec_is_branch
+    output wire         dec_is_mult,
+    output wire         dec_is_div,
+    output wire         dec_is_branch
 );
 
 //------------------------------------------------------------------------------
