@@ -27,6 +27,7 @@ module instruction_queue(
     input               rd_is_8bit,
     input               rd_dst_is_reg,
     input               rd_dst_is_memory,
+    input       [5:0]   rd_modregrm,        // [5:3]=reg, [2:0]=rm from decoder[13:8]
 
     // Outputs for dispatch (head of queue - inst0)
     output              inst0_valid,
@@ -38,6 +39,7 @@ module instruction_queue(
     output              inst0_is_8bit,
     output              inst0_dst_is_reg,
     output              inst0_dst_is_memory,
+    output      [5:0]   inst0_modregrm,     // [5:3]=reg, [2:0]=rm
 
     // Outputs for dispatch (second in queue - inst1)
     output              inst1_valid,
@@ -49,6 +51,7 @@ module instruction_queue(
     output              inst1_is_8bit,
     output              inst1_dst_is_reg,
     output              inst1_dst_is_memory,
+    output      [5:0]   inst1_modregrm,     // [5:3]=reg, [2:0]=rm
 
     // Control signals
     input               dispatch_inst0,     // Dispatch consumed inst0
@@ -73,6 +76,7 @@ reg [31:0]  dst [0:3];
 reg         is_8bit [0:3];
 reg         dst_is_reg [0:3];
 reg         dst_is_memory [0:3];
+reg [5:0]   modregrm [0:3];
 
 // Queue pointers
 reg [2:0]   head;           // Next instruction to dispatch
@@ -100,6 +104,7 @@ assign inst0_dst         = dst[head[1:0]];
 assign inst0_is_8bit     = is_8bit[head[1:0]];
 assign inst0_dst_is_reg  = dst_is_reg[head[1:0]];
 assign inst0_dst_is_memory = dst_is_memory[head[1:0]];
+assign inst0_modregrm    = modregrm[head[1:0]];
 
 // Second in queue (head + 1)
 wire [1:0] head_plus_1 = head[1:0] + 2'd1;
@@ -113,6 +118,7 @@ assign inst1_dst         = dst[head_plus_1];
 assign inst1_is_8bit     = is_8bit[head_plus_1];
 assign inst1_dst_is_reg  = dst_is_reg[head_plus_1];
 assign inst1_dst_is_memory = dst_is_memory[head_plus_1];
+assign inst1_modregrm    = modregrm[head_plus_1];
 
 //------------------------------------------------------------------------------
 // Queue Management Logic
@@ -135,6 +141,7 @@ always @(posedge clk) begin
             is_8bit[i] <= 1'b0;
             dst_is_reg[i] <= 1'b0;
             dst_is_memory[i] <= 1'b0;
+            modregrm[i] <= 6'd0;
         end
         head <= 3'd0;
         tail <= 3'd0;
@@ -152,6 +159,7 @@ always @(posedge clk) begin
             is_8bit[tail[1:0]]       <= rd_is_8bit;
             dst_is_reg[tail[1:0]]    <= rd_dst_is_reg;
             dst_is_memory[tail[1:0]] <= rd_dst_is_memory;
+            modregrm[tail[1:0]]      <= rd_modregrm;
         end
 
         // Update pointers and count

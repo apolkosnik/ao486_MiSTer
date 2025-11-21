@@ -886,6 +886,7 @@ wire [31:0] inst0_dst_q;
 wire        inst0_is_8bit_q;
 wire        inst0_dst_is_reg_q;
 wire        inst0_dst_is_memory_q;
+wire [5:0]  inst0_modregrm_q;
 
 wire        inst1_valid;
 wire [6:0]  inst1_cmd_q;
@@ -896,6 +897,7 @@ wire [31:0] inst1_dst_q;
 wire        inst1_is_8bit_q;
 wire        inst1_dst_is_reg_q;
 wire        inst1_dst_is_memory_q;
+wire [5:0]  inst1_modregrm_q;
 
 wire        dispatch_inst0;
 wire        dispatch_inst1;
@@ -920,6 +922,7 @@ instruction_queue iq_inst(
     .rd_is_8bit         (rd_is_8bit),
     .rd_dst_is_reg      (rd_dst_is_reg),
     .rd_dst_is_memory   (rd_dst_is_memory),
+    .rd_modregrm        (rd_decoder[13:8]),  // Extract modregrm reg and rm fields
 
     // To DISPATCH
     .inst0_valid        (inst0_valid),
@@ -931,6 +934,7 @@ instruction_queue iq_inst(
     .inst0_is_8bit      (inst0_is_8bit_q),
     .inst0_dst_is_reg   (inst0_dst_is_reg_q),
     .inst0_dst_is_memory(inst0_dst_is_memory_q),
+    .inst0_modregrm     (inst0_modregrm_q),
 
     .inst1_valid        (inst1_valid),
     .inst1_cmd          (inst1_cmd_q),
@@ -941,6 +945,7 @@ instruction_queue iq_inst(
     .inst1_is_8bit      (inst1_is_8bit_q),
     .inst1_dst_is_reg   (inst1_dst_is_reg_q),
     .inst1_dst_is_memory(inst1_dst_is_memory_q),
+    .inst1_modregrm     (inst1_modregrm_q),
 
     // From DISPATCH (placeholder for now)
     .dispatch_inst0     (dispatch_inst0),
@@ -1252,6 +1257,65 @@ assign alu0_available = !alu0_busy_dual;
 assign alu1_available = !alu1_busy_dual;
 assign mult_available = !mult_div_busy;
 assign div_available = !mult_div_busy;
+
+//------------------------------------------------------------------------------
+// Phase 4: Dual Writeback - Destination Register Tracking
+//------------------------------------------------------------------------------
+
+// Track which register ALU0 writes (handled by existing write stage)
+// Track which register ALU1 writes through execution pipeline
+
+// Track ALU1 destination through execution pipeline
+reg [2:0]  alu1_dst_reg_r;
+reg        alu1_dst_is_reg_r;
+reg        alu1_valid_r;
+reg [31:0] alu1_result_r;
+
+// Extract destination register index from instruction queue
+// The modregrm field contains [5:3]=reg, [2:0]=rm
+// Need to determine if destination is reg or rm based on dst_is_reg flag
+wire [2:0] inst0_dst_reg = inst0_dst_is_reg_q ? inst0_modregrm_q[5:3] : inst0_modregrm_q[2:0];
+wire [2:0] inst1_dst_reg = inst1_dst_is_reg_q ? inst1_modregrm_q[5:3] : inst1_modregrm_q[2:0];
+
+// Determine destination register for ALU1 based on which instruction was routed there
+wire [2:0] alu1_dst_reg_next = (inst0_to_alu1) ? inst0_dst_reg :
+                                (inst1_to_alu1) ? inst1_dst_reg : 3'd0;
+
+wire alu1_dst_is_reg_next = (inst0_to_alu1 && inst0_dst_is_reg_q) ||
+                             (inst1_to_alu1 && inst1_dst_is_reg_q);
+
+// Pipeline ALU1 destination info alongside execution
+always @(posedge clk) begin
+    if (rst_n == 1'b0) begin
+        alu1_dst_reg_r <= 3'd0;
+        alu1_dst_is_reg_r <= 1'b0;
+        alu1_valid_r <= 1'b0;
+        alu1_result_r <= 32'd0;
+    end
+    else begin
+        // Capture destination when ALU1 starts executing
+        if (alu1_valid_dual) begin
+            alu1_dst_reg_r <= alu1_dst_reg_next;
+            alu1_dst_is_reg_r <= alu1_dst_is_reg_next;
+        end
+
+        // Capture result when ALU1 completes
+        alu1_valid_r <= alu1_ready_dual;
+        if (alu1_ready_dual) begin
+            alu1_result_r <= alu1_result_dual;
+        end
+    end
+end
+
+// Decode which register ALU1 is writing (one-hot encoding)
+wire alu1_wr_eax = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd0);
+wire alu1_wr_ecx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd1);
+wire alu1_wr_edx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd2);
+wire alu1_wr_ebx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd3);
+wire alu1_wr_esp = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd4);
+wire alu1_wr_ebp = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd5);
+wire alu1_wr_esi = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd6);
+wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd7);
 
 //------------------------------------------------------------------------------
 
