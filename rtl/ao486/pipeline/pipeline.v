@@ -571,6 +571,7 @@ wire [31:0] task_eip;
 
 wire        io_allow_check_needed;
 
+wire        rd_busy_original;
 wire        rd_busy;
 wire        micro_ready;
 wire [87:0] micro_decoder;
@@ -823,7 +824,7 @@ read read_inst(
     .read_data                     (read_data),                     //input [63:0]
     
     //micro pipeline
-    .rd_busy                       (rd_busy),                       //output
+    .rd_busy                       (rd_busy_original),              //output
     .micro_ready                   (micro_ready),                   //input
     
     .micro_decoder                 (micro_decoder),                 //input [87:0]
@@ -869,6 +870,231 @@ read read_inst(
     .src_wire                      (src_wire),                      //output [31:0]
     .dst_wire                      (dst_wire),                      //output [31:0]
     .rd_address_effective          (rd_address_effective)           //output [31:0]
+);
+
+//------------------------------------------------------------------------------
+// Instruction Queue for Dual-Issue Dispatch
+//------------------------------------------------------------------------------
+
+wire        queue_reset;
+wire        inst0_valid;
+wire [6:0]  inst0_cmd_q;
+wire [3:0]  inst0_cmdex_q;
+wire [10:0] inst0_mutex_q;
+wire [31:0] inst0_src_q;
+wire [31:0] inst0_dst_q;
+wire        inst0_is_8bit_q;
+wire        inst0_dst_is_reg_q;
+wire        inst0_dst_is_memory_q;
+
+wire        inst1_valid;
+wire [6:0]  inst1_cmd_q;
+wire [3:0]  inst1_cmdex_q;
+wire [10:0] inst1_mutex_q;
+wire [31:0] inst1_src_q;
+wire [31:0] inst1_dst_q;
+wire        inst1_is_8bit_q;
+wire        inst1_dst_is_reg_q;
+wire        inst1_dst_is_memory_q;
+
+wire        dispatch_inst0;
+wire        dispatch_inst1;
+wire        queue_full;
+wire        queue_empty;
+wire [2:0]  queue_count;
+
+assign queue_reset = exe_reset;  // Reset queue when pipeline resets
+
+instruction_queue iq_inst(
+    .clk                (clk),
+    .rst_n              (rst_n),
+    .queue_reset        (queue_reset),
+
+    // From READ stage
+    .rd_ready           (rd_ready),
+    .rd_cmd             (rd_cmd),
+    .rd_cmdex           (rd_cmdex),
+    .rd_mutex_next      (rd_mutex_next),
+    .src_wire           (src_wire),
+    .dst_wire           (dst_wire),
+    .rd_is_8bit         (rd_is_8bit),
+    .rd_dst_is_reg      (rd_dst_is_reg),
+    .rd_dst_is_memory   (rd_dst_is_memory),
+
+    // To DISPATCH
+    .inst0_valid        (inst0_valid),
+    .inst0_cmd          (inst0_cmd_q),
+    .inst0_cmdex        (inst0_cmdex_q),
+    .inst0_mutex        (inst0_mutex_q),
+    .inst0_src          (inst0_src_q),
+    .inst0_dst          (inst0_dst_q),
+    .inst0_is_8bit      (inst0_is_8bit_q),
+    .inst0_dst_is_reg   (inst0_dst_is_reg_q),
+    .inst0_dst_is_memory(inst0_dst_is_memory_q),
+
+    .inst1_valid        (inst1_valid),
+    .inst1_cmd          (inst1_cmd_q),
+    .inst1_cmdex        (inst1_cmdex_q),
+    .inst1_mutex        (inst1_mutex_q),
+    .inst1_src          (inst1_src_q),
+    .inst1_dst          (inst1_dst_q),
+    .inst1_is_8bit      (inst1_is_8bit_q),
+    .inst1_dst_is_reg   (inst1_dst_is_reg_q),
+    .inst1_dst_is_memory(inst1_dst_is_memory_q),
+
+    // From DISPATCH (placeholder for now)
+    .dispatch_inst0     (dispatch_inst0),
+    .dispatch_inst1     (dispatch_inst1),
+
+    .queue_full         (queue_full),
+    .queue_empty        (queue_empty),
+    .queue_count        (queue_count)
+);
+
+// Stall READ stage if instruction queue is full
+assign rd_busy = rd_busy_original || queue_full;
+
+//------------------------------------------------------------------------------
+// Instruction Classification for Dispatch
+// Determine resource usage based on cmd value (from queue outputs)
+//------------------------------------------------------------------------------
+
+// Instruction 0 classification
+wire inst0_uses_alu;
+wire inst0_uses_mult;
+wire inst0_uses_div;
+wire inst0_uses_memory;
+wire inst0_is_branch;
+wire inst0_is_complex;
+
+assign inst0_uses_mult = (inst0_cmd_q == 7'd59) ||  // MUL
+                         (inst0_cmd_q == 7'd54);     // IMUL
+
+assign inst0_uses_div  = (inst0_cmd_q == 7'd42) ||  // DIV
+                         (inst0_cmd_q == 7'd43) ||  // IDIV
+                         (inst0_cmd_q == 7'd32);    // AAM
+
+assign inst0_is_branch = (inst0_cmd_q == 7'd8)  ||  // Jcc
+                         (inst0_cmd_q == 7'd2)  ||  // JCXZ
+                         (inst0_cmd_q == 7'd60) ||  // LOOP
+                         (inst0_cmd_q == 7'd87) ||  // JMP
+                         (inst0_cmd_q == 7'd3)  ||  // CALL
+                         (inst0_cmd_q == 7'd15) ||  // RET_near
+                         (inst0_cmd_q == 7'd63) ||  // RET_far
+                         (inst0_cmd_q == 7'd75) ||  // INT_INTO
+                         (inst0_cmd_q == 7'd35);    // IRET
+
+assign inst0_uses_memory = inst0_dst_is_memory_q;
+assign inst0_is_complex = 1'b0;  // Simplified - would need more logic
+
+// Most ALU operations (not mult, div, memory, or complex)
+assign inst0_uses_alu = inst0_valid &&
+                        !inst0_uses_mult &&
+                        !inst0_uses_div &&
+                        !inst0_uses_memory &&
+                        !inst0_is_complex;
+
+// Instruction 1 classification (same logic)
+wire inst1_uses_alu;
+wire inst1_uses_mult;
+wire inst1_uses_div;
+wire inst1_uses_memory;
+wire inst1_is_branch;
+wire inst1_is_complex;
+
+assign inst1_uses_mult = (inst1_cmd_q == 7'd59) || (inst1_cmd_q == 7'd54);
+assign inst1_uses_div  = (inst1_cmd_q == 7'd42) || (inst1_cmd_q == 7'd43) || (inst1_cmd_q == 7'd32);
+assign inst1_is_branch = (inst1_cmd_q == 7'd8) || (inst1_cmd_q == 7'd2) || (inst1_cmd_q == 7'd60) ||
+                         (inst1_cmd_q == 7'd87) || (inst1_cmd_q == 7'd3) || (inst1_cmd_q == 7'd15) ||
+                         (inst1_cmd_q == 7'd63) || (inst1_cmd_q == 7'd75) || (inst1_cmd_q == 7'd35);
+assign inst1_uses_memory = inst1_dst_is_memory_q;
+assign inst1_is_complex = 1'b0;
+assign inst1_uses_alu = inst1_valid && !inst1_uses_mult && !inst1_uses_div &&
+                        !inst1_uses_memory && !inst1_is_complex;
+
+//------------------------------------------------------------------------------
+// Resource Availability Tracking
+//------------------------------------------------------------------------------
+
+// For initial implementation, assume resources are available
+// (Will be refined when execute stages are integrated)
+wire alu0_available = 1'b1;
+wire alu1_available = 1'b1;
+wire mult_available = 1'b1;
+wire div_available = 1'b1;
+wire mem_available = 1'b1;
+
+wire alu0_busy_w = !alu0_available;
+wire alu1_busy_w = !alu1_available;
+wire mult_busy_w = !mult_available;
+wire div_busy_w = !div_available;
+wire mem_busy_w = !mem_available;
+
+// Pipeline mutex tracking (combine execute and write stage mutexes)
+wire [10:0] pipeline_mutex;
+assign pipeline_mutex = exe_mutex | wr_mutex;
+
+//------------------------------------------------------------------------------
+// Dispatch Logic - Decides which instructions to issue
+//------------------------------------------------------------------------------
+
+wire        inst0_to_alu0;
+wire        inst0_to_alu1;
+wire        inst1_to_alu0;
+wire        inst1_to_alu1;
+wire        dual_issue;
+wire        stall_dependency;
+wire        stall_structural;
+
+dispatch dispatch_inst(
+    .clk                (clk),
+    .rst_n              (rst_n),
+    .dispatch_reset     (exe_reset),
+
+    // Instruction 0 from queue
+    .inst0_valid        (inst0_valid),
+    .inst0_cmd          (inst0_cmd_q),
+    .inst0_cmdex        (inst0_cmdex_q),
+    .inst0_mutex        (inst0_mutex_q),
+    .inst0_uses_alu     (inst0_uses_alu),
+    .inst0_uses_mult    (inst0_uses_mult),
+    .inst0_uses_div     (inst0_uses_div),
+    .inst0_uses_memory  (inst0_uses_memory),
+    .inst0_is_branch    (inst0_is_branch),
+    .inst0_is_complex   (inst0_is_complex),
+
+    // Instruction 1 from queue
+    .inst1_valid        (inst1_valid),
+    .inst1_cmd          (inst1_cmd_q),
+    .inst1_cmdex        (inst1_cmdex_q),
+    .inst1_mutex        (inst1_mutex_q),
+    .inst1_uses_alu     (inst1_uses_alu),
+    .inst1_uses_mult    (inst1_uses_mult),
+    .inst1_uses_div     (inst1_uses_div),
+    .inst1_uses_memory  (inst1_uses_memory),
+    .inst1_is_branch    (inst1_is_branch),
+    .inst1_is_complex   (inst1_is_complex),
+
+    // Resource availability
+    .alu0_busy          (alu0_busy_w),
+    .alu1_busy          (alu1_busy_w),
+    .mult_busy          (mult_busy_w),
+    .div_busy           (div_busy_w),
+    .mem_busy           (mem_busy_w),
+
+    // Pipeline state
+    .pipeline_mutex     (pipeline_mutex),
+
+    // Dispatch decisions (outputs)
+    .dispatch_inst0     (dispatch_inst0),
+    .dispatch_inst1     (dispatch_inst1),
+    .inst0_to_alu0      (inst0_to_alu0),
+    .inst0_to_alu1      (inst0_to_alu1),
+    .inst1_to_alu0      (inst1_to_alu0),
+    .inst1_to_alu1      (inst1_to_alu1),
+    .dual_issue         (dual_issue),
+    .stall_dependency   (stall_dependency),
+    .stall_structural   (stall_structural)
 );
 
 //------------------------------------------------------------------------------
