@@ -50,11 +50,8 @@ module dispatch(
     input               div_busy,
     input               mem_busy,
 
-    // Pipeline mutex state
-    input       [10:0]  exe0_mutex,
-    input       [10:0]  exe1_mutex,
-    input       [10:0]  wr0_mutex,
-    input       [10:0]  wr1_mutex,
+    // Pipeline mutex state (combined from exe and wr stages)
+    input       [10:0]  pipeline_mutex,
 
     // Dispatch outputs
     output              dispatch_inst0,      // Dispatch instruction 0
@@ -82,9 +79,7 @@ assign raw_dependency_01 =
      (inst0_mutex[9] && inst1_mutex[9]) ||          // Memory dependency
      (inst0_mutex[10] && inst1_mutex[10]));         // I/O dependency
 
-// Check dependencies with in-flight instructions
-wire [10:0] pipeline_mutex;
-assign pipeline_mutex = exe0_mutex | exe1_mutex | wr0_mutex | wr1_mutex;
+// pipeline_mutex is now an input port (combined exe_mutex | wr_mutex from pipeline.v)
 
 // NOTE: Mutex ambiguity issue
 // The ao486 mutex vector does not distinguish between registers/resources that
@@ -105,7 +100,7 @@ assign inst0_has_dependency =
     (|(inst0_mutex[7:0] & pipeline_mutex[7:0]) ||   // Register dependency (reduction OR)
      (inst0_mutex[8] && pipeline_mutex[8]) ||       // EFLAGS dependency
      (inst0_mutex[9] && pipeline_mutex[9]) ||       // Memory dependency
-     (inst0_mutex[11] && pipeline_mutex[11]));      // I/O dependency
+     (inst0_mutex[10] && pipeline_mutex[10]));      // I/O dependency
 
 wire inst1_has_dependency;
 assign inst1_has_dependency =
@@ -113,7 +108,7 @@ assign inst1_has_dependency =
     (|(inst1_mutex[7:0] & pipeline_mutex[7:0]) ||   // Register dependency (reduction OR)
      (inst1_mutex[8] && pipeline_mutex[8]) ||       // EFLAGS dependency
      (inst1_mutex[9] && pipeline_mutex[9]) ||       // Memory dependency
-     (inst1_mutex[11] && pipeline_mutex[11]));      // I/O dependency
+     (inst1_mutex[10] && pipeline_mutex[10]));      // I/O dependency
 
 //------------------------------------------------------------------------------
 // Resource Conflict Detection
