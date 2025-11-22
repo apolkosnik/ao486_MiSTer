@@ -144,12 +144,10 @@ wire inst0_mult_ok;
 wire inst0_div_ok;
 wire inst0_mem_ok;
 
-// Only dispatch instructions that actually use these resources
-// If instruction doesn't use the resource, it can't go through superscalar path
-assign inst0_alu_ok = inst0_uses_alu ? (alu0_available || alu1_available) : 1'b0;
-assign inst0_mult_ok = inst0_uses_mult ? mult_available : 1'b0;
-assign inst0_div_ok = inst0_uses_div ? div_available : 1'b0;
-assign inst0_mem_ok = 1'b0;  // Memory ops never dispatch - use original execute path
+assign inst0_alu_ok = (inst0_uses_alu == 1'b0) ? 1'b1 : (alu0_available || alu1_available);
+assign inst0_mult_ok = (inst0_uses_mult == 1'b0) ? 1'b1 : mult_available;
+assign inst0_div_ok = (inst0_uses_div == 1'b0) ? 1'b1 : div_available;
+assign inst0_mem_ok = (inst0_uses_memory == 1'b0) ? 1'b1 : mem_available;
 
 wire can_dispatch_inst0;
 assign can_dispatch_inst0 =
@@ -165,10 +163,9 @@ wire inst1_alu_ok;
 wire inst1_mult_ok;
 wire inst1_mem_ok;
 
-// Same logic for inst1 - only dispatch if instruction uses the resource
-assign inst1_alu_ok = inst1_uses_alu ? (alu0_available || alu1_available) : 1'b0;
-assign inst1_mult_ok = inst1_uses_mult ? mult_available : 1'b0;
-assign inst1_mem_ok = 1'b0;  // Memory ops never dispatch - use original execute path
+assign inst1_alu_ok = (inst1_uses_alu == 1'b0) ? 1'b1 : (alu0_available || alu1_available);
+assign inst1_mult_ok = (inst1_uses_mult == 1'b0) ? 1'b1 : mult_available;
+assign inst1_mem_ok = (inst1_uses_memory == 1'b0) ? 1'b1 : mem_available;
 
 wire can_dispatch_inst1;
 assign can_dispatch_inst1 =
