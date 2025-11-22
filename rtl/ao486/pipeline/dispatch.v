@@ -214,8 +214,7 @@ assign stall_structural =
     (inst0_valid && inst0_uses_alu && !alu0_available && !alu1_available) ||
     (inst0_valid && inst0_uses_mult && !mult_available) ||
     (inst0_valid && inst0_uses_div && !div_available) ||
-    (inst0_valid && inst0_uses_memory && !mem_available) ||
-    resource_conflict;
+    (inst0_valid && inst0_uses_memory && !mem_available);
 
 //------------------------------------------------------------------------------
 
