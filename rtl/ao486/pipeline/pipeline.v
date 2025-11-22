@@ -1151,6 +1151,10 @@ assign alu0_dst_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_dst_q :
 assign alu0_is_8bit_dual = (dispatch_inst0 && inst0_to_alu0) ? inst0_is_8bit_q :
                            (dispatch_inst1 && inst1_to_alu0) ? inst1_is_8bit_q : 1'b0;
 
+// ALU0 uses multiplier/divider (for flag writeback tracking)
+wire alu0_uses_mult_dual = (inst0_uses_mult && inst0_to_alu0) || (inst1_uses_mult && inst1_to_alu0);
+wire alu0_uses_div_dual  = (inst0_uses_div && inst0_to_alu0) || (inst1_uses_div && inst1_to_alu0);
+
 // Route inst0 to ALU1 or inst1 to ALU1
 assign alu1_valid_dual = (dispatch_inst0 && inst0_to_alu1) ||
                          (dispatch_inst1 && inst1_to_alu1);
@@ -1228,8 +1232,8 @@ dual_execute dual_execute_inst(
     .alu0_src           (alu0_src_dual),
     .alu0_dst           (alu0_dst_dual),
     .alu0_is_8bit       (alu0_is_8bit_dual),
-    .alu0_uses_mult     ((inst0_uses_mult && inst0_to_alu0) || (inst1_uses_mult && inst1_to_alu0)),
-    .alu0_uses_div      ((inst0_uses_div && inst0_to_alu0) || (inst1_uses_div && inst1_to_alu0)),
+    .alu0_uses_mult     (alu0_uses_mult_dual),
+    .alu0_uses_div      (alu0_uses_div_dual),
 
     // ALU0 outputs
     .alu0_busy          (alu0_busy_dual),
@@ -1361,19 +1365,32 @@ wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && 
 // Similar to ALU1 register tracking, but for flags only
 reg [4:0]  alu0_flags_r;
 reg        alu0_flags_valid_r;
+reg        alu0_is_alu_op_r;  // Track if operation is ALU (not mult/div)
 
+// Determine if the ALU0 instruction is a flag-modifying ALU operation
+wire alu0_is_alu_op = alu0_valid_dual && !alu0_uses_mult_dual && !alu0_uses_div_dual;
+
+// Track operation type through execution
 always @(posedge clk) begin
     if (rst_n == 1'b0) begin
         alu0_flags_r <= 5'd0;
         alu0_flags_valid_r <= 1'b0;
+        alu0_is_alu_op_r <= 1'b0;
     end
     else if (exe_reset || wr_reset) begin
         // Clear on pipeline flush
         alu0_flags_valid_r <= 1'b0;
+        alu0_is_alu_op_r <= 1'b0;
     end
     else begin
-        // Capture flags when ALU0 completes
-        if (alu0_ready_dual) begin
+        // Track operation type when ALU0 starts
+        if (alu0_valid_dual) begin
+            alu0_is_alu_op_r <= alu0_is_alu_op;
+        end
+
+        // Capture flags when ALU0 completes, but ONLY for ALU operations
+        // Multiply/divide don't compute flags in dual_execute, so don't write stale data
+        if (alu0_ready_dual && alu0_is_alu_op_r) begin
             alu0_flags_r <= alu0_result_signals_dual;
             alu0_flags_valid_r <= 1'b1;
         end
