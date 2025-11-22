@@ -1425,9 +1425,11 @@ wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && 
 reg [4:0]  alu0_flags_r;
 reg        alu0_flags_valid_r;
 reg        alu0_is_alu_op_r;  // Track if operation is ALU (not mult/div)
+reg        alu0_is_inst1_r;   // Track if this is inst1 (for priority)
 
 // Determine if the ALU0 instruction is a flag-modifying ALU operation
 wire alu0_is_alu_op = alu0_valid_dual && !alu0_uses_mult_dual && !alu0_uses_div_dual;
+wire alu0_is_inst1 = (dispatch_inst1 && inst1_to_alu0);
 
 // Track operation type through execution
 always @(posedge clk) begin
@@ -1435,16 +1437,19 @@ always @(posedge clk) begin
         alu0_flags_r <= 5'd0;
         alu0_flags_valid_r <= 1'b0;
         alu0_is_alu_op_r <= 1'b0;
+        alu0_is_inst1_r <= 1'b0;
     end
     else if (exe_reset || wr_reset) begin
         // Clear on pipeline flush
         alu0_flags_valid_r <= 1'b0;
         alu0_is_alu_op_r <= 1'b0;
+        alu0_is_inst1_r <= 1'b0;
     end
     else begin
         // Track operation type when ALU0 starts
         if (alu0_valid_dual) begin
             alu0_is_alu_op_r <= alu0_is_alu_op;
+            alu0_is_inst1_r <= alu0_is_inst1;
         end
 
         // Capture flags when ALU0 completes, but ONLY for ALU operations
@@ -1455,6 +1460,44 @@ always @(posedge clk) begin
         end
         else begin
             alu0_flags_valid_r <= 1'b0;
+        end
+    end
+end
+
+// ALU1 flag tracking (previously missing!)
+reg [4:0]  alu1_flags_r;
+reg        alu1_flags_valid_r;
+reg        alu1_is_alu_op_r;
+reg        alu1_is_inst1_r;   // Track if this is inst1 (for priority)
+
+wire alu1_is_alu_op = alu1_valid_dual && !((inst0_uses_mult && inst0_to_alu1) || (inst1_uses_mult && inst1_to_alu1))
+                                      && !((inst0_uses_div && inst0_to_alu1) || (inst1_uses_div && inst1_to_alu1));
+wire alu1_is_inst1 = (dispatch_inst1 && inst1_to_alu1);
+
+always @(posedge clk) begin
+    if (rst_n == 1'b0) begin
+        alu1_flags_r <= 5'd0;
+        alu1_flags_valid_r <= 1'b0;
+        alu1_is_alu_op_r <= 1'b0;
+        alu1_is_inst1_r <= 1'b0;
+    end
+    else if (exe_reset || wr_reset) begin
+        alu1_flags_valid_r <= 1'b0;
+        alu1_is_alu_op_r <= 1'b0;
+        alu1_is_inst1_r <= 1'b0;
+    end
+    else begin
+        if (alu1_valid_dual) begin
+            alu1_is_alu_op_r <= alu1_is_alu_op;
+            alu1_is_inst1_r <= alu1_is_inst1;
+        end
+
+        if (alu1_ready_dual && alu1_is_alu_op_r) begin
+            alu1_flags_r <= alu1_result_signals_dual;
+            alu1_flags_valid_r <= 1'b1;
+        end
+        else begin
+            alu1_flags_valid_r <= 1'b0;
         end
     end
 end
@@ -1499,9 +1542,18 @@ wire        exe_arith_add_carry;
 wire        exe_arith_adc_carry;
 wire        exe_arith_sbb_carry;
 
-// Mux exe_result_signals between execute and dual_execute paths
-// When ALU0 completes a dual-execute instruction, use its flags instead
-wire [4:0]  exe_result_signals = alu0_flags_valid_r ? alu0_flags_r : exe_result_signals_orig;
+// Mux exe_result_signals with priority based on program order
+// Priority: inst1 flags > inst0 flags > execute path flags
+// inst1 is younger, so its flags are the architectural state when both execute in same cycle
+wire inst1_flags_ready = (alu0_flags_valid_r && alu0_is_inst1_r) || (alu1_flags_valid_r && alu1_is_inst1_r);
+wire inst0_flags_ready = (alu0_flags_valid_r && !alu0_is_inst1_r) || (alu1_flags_valid_r && !alu1_is_inst1_r);
+
+wire [4:0] inst1_flags = (alu0_flags_valid_r && alu0_is_inst1_r) ? alu0_flags_r : alu1_flags_r;
+wire [4:0] inst0_flags = (alu0_flags_valid_r && !alu0_is_inst1_r) ? alu0_flags_r : alu1_flags_r;
+
+wire [4:0]  exe_result_signals = inst1_flags_ready ? inst1_flags :
+                                 inst0_flags_ready ? inst0_flags :
+                                 exe_result_signals_orig;
 wire [31:0] src_final;
 wire [31:0] dst_final;
 wire        exe_mult_overflow;
