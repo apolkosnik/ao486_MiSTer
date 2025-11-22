@@ -80,7 +80,7 @@ assign raw_dependency_01 =
     (|(inst0_mutex[7:0] & inst1_mutex[7:0]) ||      // Register overlap (reduction OR)
      (inst0_mutex[8] && inst1_mutex[8]) ||          // EFLAGS dependency
      (inst0_mutex[9] && inst1_mutex[9]) ||          // Memory dependency
-     (inst0_mutex[11] && inst1_mutex[11]));         // I/O dependency
+     (inst0_mutex[10] && inst1_mutex[10]));         // I/O dependency
 
 // Check dependencies with in-flight instructions
 wire [10:0] pipeline_mutex;
