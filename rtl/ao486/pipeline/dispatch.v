@@ -178,6 +178,7 @@ assign can_dispatch_inst1 =
     !inst0_must_single_issue &&
     !inst1_must_single_issue &&
     !resource_conflict &&
+    !inst1_mutex[8] &&  // Block inst1 if it touches EFLAGS (no flag writeback port for ALU1)
     inst1_alu_ok &&
     inst1_mult_ok &&
     inst1_mem_ok;

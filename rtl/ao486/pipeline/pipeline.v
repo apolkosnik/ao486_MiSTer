@@ -998,11 +998,12 @@ assign inst0_is_branch = (inst0_cmd_q == 7'd8)  ||  // Jcc
 assign inst0_uses_memory = inst0_dst_is_memory_q;
 assign inst0_is_complex = 1'b0;  // Simplified - would need more logic
 
-// Most ALU operations (not mult, div, memory, or complex)
+// Most ALU operations (not mult, div, memory, branch, or complex)
 assign inst0_uses_alu = inst0_valid &&
                         !inst0_uses_mult &&
                         !inst0_uses_div &&
                         !inst0_uses_memory &&
+                        !inst0_is_branch &&
                         !inst0_is_complex;
 
 // Instruction 1 classification (same logic)
@@ -1021,7 +1022,7 @@ assign inst1_is_branch = (inst1_cmd_q == 7'd8) || (inst1_cmd_q == 7'd2) || (inst
 assign inst1_uses_memory = inst1_dst_is_memory_q;
 assign inst1_is_complex = 1'b0;
 assign inst1_uses_alu = inst1_valid && !inst1_uses_mult && !inst1_uses_div &&
-                        !inst1_uses_memory && !inst1_is_complex;
+                        !inst1_uses_memory && !inst1_is_branch && !inst1_is_complex;
 
 //------------------------------------------------------------------------------
 // Resource Availability Tracking
