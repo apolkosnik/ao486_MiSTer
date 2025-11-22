@@ -114,20 +114,22 @@ always @(posedge clk) begin
         // Simple ALU operations (1 cycle latency)
         case (alu0_cmd)
             `CMD_ADD, `CMD_ADC: begin
-                {alu0_flags[0], alu0_arith_result} <= alu0_dst + alu0_src +
-                    ((alu0_cmd == `CMD_ADC) ? {31'h0, cflag} : 32'h0);
-                alu0_flags[4] <= (alu0_dst[31] == alu0_src[31]) && (alu0_dst[31] != alu0_arith_result[31]);
-                alu0_flags[2] <= alu0_arith_result[31];
-                alu0_flags[1] <= ^alu0_arith_result[7:0];
+                automatic logic [32:0] add_result = alu0_dst + alu0_src + ((alu0_cmd == `CMD_ADC) ? {31'h0, cflag} : 32'h0);
+                alu0_arith_result <= add_result[31:0];
+                alu0_flags[0] <= add_result[32];  // CF
+                alu0_flags[4] <= (alu0_dst[31] == alu0_src[31]) && (alu0_dst[31] != add_result[31]);  // OF
+                alu0_flags[2] <= add_result[31];  // SF
+                alu0_flags[1] <= ^add_result[7:0];  // PF
                 alu0_done <= 1'b1;
             end
 
             `CMD_SUB, `CMD_SBB, `CMD_CMP: begin
-                {alu0_flags[0], alu0_arith_result} <= alu0_dst - alu0_src -
-                    ((alu0_cmd == `CMD_SBB) ? {31'h0, cflag} : 32'h0);
-                alu0_flags[4] <= (alu0_dst[31] != alu0_src[31]) && (alu0_dst[31] != alu0_arith_result[31]);
-                alu0_flags[2] <= alu0_arith_result[31];
-                alu0_flags[1] <= ^alu0_arith_result[7:0];
+                automatic logic [32:0] sub_result = alu0_dst - alu0_src - ((alu0_cmd == `CMD_SBB) ? {31'h0, cflag} : 32'h0);
+                alu0_arith_result <= sub_result[31:0];
+                alu0_flags[0] <= sub_result[32];  // CF (borrow)
+                alu0_flags[4] <= (alu0_dst[31] != alu0_src[31]) && (alu0_dst[31] != sub_result[31]);  // OF
+                alu0_flags[2] <= sub_result[31];  // SF
+                alu0_flags[1] <= ^sub_result[7:0];  // PF
                 alu0_done <= 1'b1;
             end
 
@@ -135,8 +137,8 @@ always @(posedge clk) begin
                 alu0_arith_result <= alu0_dst & alu0_src;
                 alu0_flags[0] <= 1'b0;  // CF = 0
                 alu0_flags[4] <= 1'b0;  // OF = 0
-                alu0_flags[2] <= alu0_arith_result[31];
-                alu0_flags[1] <= ^alu0_arith_result[7:0];
+                alu0_flags[2] <= (alu0_dst & alu0_src)[31];  // SF from new result
+                alu0_flags[1] <= ^(alu0_dst & alu0_src)[7:0];  // PF from new result
                 alu0_done <= 1'b1;
             end
 
@@ -144,8 +146,8 @@ always @(posedge clk) begin
                 alu0_arith_result <= alu0_dst | alu0_src;
                 alu0_flags[0] <= 1'b0;
                 alu0_flags[4] <= 1'b0;
-                alu0_flags[2] <= alu0_arith_result[31];
-                alu0_flags[1] <= ^alu0_arith_result[7:0];
+                alu0_flags[2] <= (alu0_dst | alu0_src)[31];
+                alu0_flags[1] <= ^(alu0_dst | alu0_src)[7:0];
                 alu0_done <= 1'b1;
             end
 
@@ -153,8 +155,8 @@ always @(posedge clk) begin
                 alu0_arith_result <= alu0_dst ^ alu0_src;
                 alu0_flags[0] <= 1'b0;
                 alu0_flags[4] <= 1'b0;
-                alu0_flags[2] <= alu0_arith_result[31];
-                alu0_flags[1] <= ^alu0_arith_result[7:0];
+                alu0_flags[2] <= (alu0_dst ^ alu0_src)[31];
+                alu0_flags[1] <= ^(alu0_dst ^ alu0_src)[7:0];
                 alu0_done <= 1'b1;
             end
 
@@ -191,20 +193,22 @@ always @(posedge clk) begin
         // Simple ALU operations (1 cycle latency)
         case (alu1_cmd)
             `CMD_ADD, `CMD_ADC: begin
-                {alu1_flags[0], alu1_arith_result} <= alu1_dst + alu1_src +
-                    ((alu1_cmd == `CMD_ADC) ? {31'h0, cflag} : 32'h0);
-                alu1_flags[4] <= (alu1_dst[31] == alu1_src[31]) && (alu1_dst[31] != alu1_arith_result[31]);
-                alu1_flags[2] <= alu1_arith_result[31];
-                alu1_flags[1] <= ^alu1_arith_result[7:0];
+                automatic logic [32:0] add_result = alu1_dst + alu1_src + ((alu1_cmd == `CMD_ADC) ? {31'h0, cflag} : 32'h0);
+                alu1_arith_result <= add_result[31:0];
+                alu1_flags[0] <= add_result[32];  // CF
+                alu1_flags[4] <= (alu1_dst[31] == alu1_src[31]) && (alu1_dst[31] != add_result[31]);  // OF
+                alu1_flags[2] <= add_result[31];  // SF
+                alu1_flags[1] <= ^add_result[7:0];  // PF
                 alu1_done <= 1'b1;
             end
 
             `CMD_SUB, `CMD_SBB, `CMD_CMP: begin
-                {alu1_flags[0], alu1_arith_result} <= alu1_dst - alu1_src -
-                    ((alu1_cmd == `CMD_SBB) ? {31'h0, cflag} : 32'h0);
-                alu1_flags[4] <= (alu1_dst[31] != alu1_src[31]) && (alu1_dst[31] != alu1_arith_result[31]);
-                alu1_flags[2] <= alu1_arith_result[31];
-                alu1_flags[1] <= ^alu1_arith_result[7:0];
+                automatic logic [32:0] sub_result = alu1_dst - alu1_src - ((alu1_cmd == `CMD_SBB) ? {31'h0, cflag} : 32'h0);
+                alu1_arith_result <= sub_result[31:0];
+                alu1_flags[0] <= sub_result[32];  // CF (borrow)
+                alu1_flags[4] <= (alu1_dst[31] != alu1_src[31]) && (alu1_dst[31] != sub_result[31]);  // OF
+                alu1_flags[2] <= sub_result[31];  // SF
+                alu1_flags[1] <= ^sub_result[7:0];  // PF
                 alu1_done <= 1'b1;
             end
 
@@ -212,8 +216,8 @@ always @(posedge clk) begin
                 alu1_arith_result <= alu1_dst & alu1_src;
                 alu1_flags[0] <= 1'b0;
                 alu1_flags[4] <= 1'b0;
-                alu1_flags[2] <= alu1_arith_result[31];
-                alu1_flags[1] <= ^alu1_arith_result[7:0];
+                alu1_flags[2] <= (alu1_dst & alu1_src)[31];  // SF from new result
+                alu1_flags[1] <= ^(alu1_dst & alu1_src)[7:0];  // PF from new result
                 alu1_done <= 1'b1;
             end
 
@@ -221,8 +225,8 @@ always @(posedge clk) begin
                 alu1_arith_result <= alu1_dst | alu1_src;
                 alu1_flags[0] <= 1'b0;
                 alu1_flags[4] <= 1'b0;
-                alu1_flags[2] <= alu1_arith_result[31];
-                alu1_flags[1] <= ^alu1_arith_result[7:0];
+                alu1_flags[2] <= (alu1_dst | alu1_src)[31];
+                alu1_flags[1] <= ^(alu1_dst | alu1_src)[7:0];
                 alu1_done <= 1'b1;
             end
 
@@ -230,8 +234,8 @@ always @(posedge clk) begin
                 alu1_arith_result <= alu1_dst ^ alu1_src;
                 alu1_flags[0] <= 1'b0;
                 alu1_flags[4] <= 1'b0;
-                alu1_flags[2] <= alu1_arith_result[31];
-                alu1_flags[1] <= ^alu1_arith_result[7:0];
+                alu1_flags[2] <= (alu1_dst ^ alu1_src)[31];
+                alu1_flags[1] <= ^(alu1_dst ^ alu1_src)[7:0];
                 alu1_done <= 1'b1;
             end
 
