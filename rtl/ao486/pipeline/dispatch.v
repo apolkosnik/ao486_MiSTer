@@ -118,7 +118,8 @@ assign inst1_has_dependency =
 wire resource_conflict;
 assign resource_conflict =
     inst0_valid && inst1_valid &&
-    ((inst0_uses_mult && inst1_uses_mult) ||        // Both need multiplier
+    ((inst0_uses_alu && inst1_uses_alu && !(alu0_available && alu1_available)) ||  // Both need ALU but not both ALUs free
+     (inst0_uses_mult && inst1_uses_mult) ||        // Both need multiplier
      (inst0_uses_div && inst1_uses_div) ||          // Both need divider
      (inst0_uses_memory && inst1_uses_memory));     // Both need memory
 
@@ -136,7 +137,7 @@ wire mem_available = !mem_busy;
 // Complex instructions must execute alone (no dual-issue)
 // Also block memory ops and div - dual_execute can only handle ALU and multiply
 wire inst0_must_single_issue = inst0_is_complex || inst0_is_branch || inst0_uses_div || inst0_uses_memory;
-wire inst1_must_single_issue = inst1_is_complex || inst1_is_branch || inst1_uses_div;
+wire inst1_must_single_issue = inst1_is_complex || inst1_is_branch || inst1_uses_div || inst1_uses_memory;
 
 // Can we dispatch inst0?
 // NOTE: Check for == 1'b0 first to handle any potential X/Z values safely
@@ -154,6 +155,7 @@ wire can_dispatch_inst0;
 assign can_dispatch_inst0 =
     inst0_valid &&
     !inst0_has_dependency &&
+    !inst0_must_single_issue &&  // Defense-in-depth: don't dispatch branches/complex/div/memory
     inst0_alu_ok &&
     inst0_mult_ok &&
     inst0_div_ok &&
