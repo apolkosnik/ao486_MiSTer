@@ -1354,6 +1354,36 @@ wire alu1_wr_esi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && 
 wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd7);
 
 //------------------------------------------------------------------------------
+// ALU0 Flag Writeback Tracking
+//------------------------------------------------------------------------------
+
+// Track ALU0 flags for writeback when using dual-execute path
+// Similar to ALU1 register tracking, but for flags only
+reg [4:0]  alu0_flags_r;
+reg        alu0_flags_valid_r;
+
+always @(posedge clk) begin
+    if (rst_n == 1'b0) begin
+        alu0_flags_r <= 5'd0;
+        alu0_flags_valid_r <= 1'b0;
+    end
+    else if (exe_reset || wr_reset) begin
+        // Clear on pipeline flush
+        alu0_flags_valid_r <= 1'b0;
+    end
+    else begin
+        // Capture flags when ALU0 completes
+        if (alu0_ready_dual) begin
+            alu0_flags_r <= alu0_result_signals_dual;
+            alu0_flags_valid_r <= 1'b1;
+        end
+        else begin
+            alu0_flags_valid_r <= 1'b0;
+        end
+    end
+end
+
+//------------------------------------------------------------------------------
 
 wire [31:0] wr_stack_offset;
 wire [1:0]  wr_task_rpl;
@@ -1386,12 +1416,16 @@ wire [3:0]  exe_debug_read;
 wire [31:0] exe_result;
 wire [31:0] exe_result2;
 wire [31:0] exe_result_push;
-wire [4:0]  exe_result_signals;
+wire [4:0]  exe_result_signals_orig;  // From execute module
 wire [3:0]  exe_arith_index;
 wire        exe_arith_sub_carry;
 wire        exe_arith_add_carry;
 wire        exe_arith_adc_carry;
 wire        exe_arith_sbb_carry;
+
+// Mux exe_result_signals between execute and dual_execute paths
+// When ALU0 completes a dual-execute instruction, use its flags instead
+wire [4:0]  exe_result_signals = alu0_flags_valid_r ? alu0_flags_r : exe_result_signals_orig;
 wire [31:0] src_final;
 wire [31:0] dst_final;
 wire        exe_mult_overflow;
@@ -1633,7 +1667,7 @@ execute execute_inst(
     .exe_result                    (exe_result),                    //output [31:0]
     .exe_result2                   (exe_result2),                   //output [31:0]
     .exe_result_push               (exe_result_push),               //output [31:0]
-    .exe_result_signals            (exe_result_signals),            //output [4:0]
+    .exe_result_signals            (exe_result_signals_orig),       //output [4:0]
     .exe_arith_index               (exe_arith_index),               //output [3:0]
     .exe_arith_sub_carry           (exe_arith_sub_carry),           //output
     .exe_arith_add_carry           (exe_arith_add_carry),           //output
