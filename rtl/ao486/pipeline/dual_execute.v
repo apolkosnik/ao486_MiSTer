@@ -104,13 +104,17 @@ module dual_execute(
 reg [31:0]  alu0_arith_result;
 reg [4:0]   alu0_flags;
 reg         alu0_done;
+reg         alu0_executing_r;  // Registered busy state (breaks combinational loop with dispatch)
 
 always @(posedge clk) begin
     if (rst_n == 1'b0 || exe_reset) begin
         alu0_arith_result <= 32'h0;
         alu0_flags <= 5'h0;
         alu0_done <= 1'b0;
+        alu0_executing_r <= 1'b0;
     end else if (alu0_valid && !alu0_uses_mult && !alu0_uses_div) begin
+        // Instruction accepted, mark as executing
+        alu0_executing_r <= 1'b1;
         // Simple ALU operations (1 cycle latency)
         case (alu0_cmd)
             `CMD_ADD, `CMD_ADC: begin
@@ -185,6 +189,7 @@ always @(posedge clk) begin
         endcase
     end else begin
         alu0_done <= 1'b0;
+        alu0_executing_r <= 1'b0;  // Clear busy when no instruction
     end
 end
 
@@ -195,13 +200,17 @@ end
 reg [31:0]  alu1_arith_result;
 reg [4:0]   alu1_flags;
 reg         alu1_done;
+reg         alu1_executing_r;  // Registered busy state (breaks combinational loop with dispatch)
 
 always @(posedge clk) begin
     if (rst_n == 1'b0 || exe_reset) begin
         alu1_arith_result <= 32'h0;
         alu1_flags <= 5'h0;
         alu1_done <= 1'b0;
+        alu1_executing_r <= 1'b0;
     end else if (alu1_valid && !alu1_uses_mult && !alu1_uses_div) begin
+        // Instruction accepted, mark as executing
+        alu1_executing_r <= 1'b1;
         // Simple ALU operations (1 cycle latency)
         case (alu1_cmd)
             `CMD_ADD, `CMD_ADC: begin
@@ -276,6 +285,7 @@ always @(posedge clk) begin
         endcase
     end else begin
         alu1_done <= 1'b0;
+        alu1_executing_r <= 1'b0;  // Clear busy when no instruction
     end
 end
 
@@ -322,17 +332,17 @@ end
 //------------------------------------------------------------------------------
 
 // ALU busy logic:
-// - For ALU operations: busy while valid and not done (1 cycle)
+// - For ALU operations: busy while executing (registered state)
 // - For multiply: busy for entire multiply duration (3 cycles)
-// CRITICAL: Don't depend on alu_valid for multiply - it goes low after dispatch!
-assign alu0_busy = (alu0_valid && !alu0_done) || (mult_active && mult_for_alu0);
+// FIXED: Use registered executing state instead of alu_valid to break combinational loop
+assign alu0_busy = alu0_executing_r || (mult_active && mult_for_alu0);
 assign alu0_ready = alu0_done || (mult_active && mult_counter == 3'h0 && mult_for_alu0);
 assign alu0_result = alu0_uses_mult ? mult_result_full[31:0] : alu0_arith_result;
 assign alu0_result2 = alu0_uses_mult ? mult_result_full[63:32] : 32'h0;
 assign alu0_result_signals = alu0_flags;
 assign alu0_exception = 1'b0;
 
-assign alu1_busy = (alu1_valid && !alu1_done) || (mult_active && !mult_for_alu0);
+assign alu1_busy = alu1_executing_r || (mult_active && !mult_for_alu0);
 assign alu1_ready = alu1_done || (mult_active && mult_counter == 3'h0 && !mult_for_alu0);
 assign alu1_result = alu1_uses_mult ? mult_result_full[31:0] : alu1_arith_result;
 assign alu1_result2 = alu1_uses_mult ? mult_result_full[63:32] : 32'h0;
