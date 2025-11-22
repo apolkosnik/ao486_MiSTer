@@ -957,8 +957,7 @@ instruction_queue iq_inst(
 );
 
 // Stall READ stage if instruction queue is full
-// DISABLED: Queue experimental, don't stall READ stage
-assign rd_busy = rd_busy_original; // || queue_full;
+assign rd_busy = rd_busy_original || queue_full;
 
 //------------------------------------------------------------------------------
 // Instruction Classification for Dispatch
@@ -1269,6 +1268,7 @@ assign div_available = !mult_div_busy;
 // Track ALU1 destination through execution pipeline
 reg [2:0]  alu1_dst_reg_r;
 reg        alu1_dst_is_reg_r;
+reg [6:0]  alu1_cmd_r;        // Track command to determine if instruction writes
 reg        alu1_valid_r;
 reg [31:0] alu1_result_r;
 
@@ -1278,12 +1278,15 @@ reg [31:0] alu1_result_r;
 wire [2:0] inst0_dst_reg = inst0_dst_is_reg_q ? inst0_modregrm_q[5:3] : inst0_modregrm_q[2:0];
 wire [2:0] inst1_dst_reg = inst1_dst_is_reg_q ? inst1_modregrm_q[5:3] : inst1_modregrm_q[2:0];
 
-// Determine destination register for ALU1 based on which instruction was routed there
+// Determine destination register and command for ALU1 based on which instruction was routed there
 wire [2:0] alu1_dst_reg_next = (inst0_to_alu1) ? inst0_dst_reg :
                                 (inst1_to_alu1) ? inst1_dst_reg : 3'd0;
 
 wire alu1_dst_is_reg_next = (inst0_to_alu1 && inst0_dst_is_reg_q) ||
                              (inst1_to_alu1 && inst1_dst_is_reg_q);
+
+wire [6:0] alu1_cmd_next = (inst0_to_alu1) ? inst0_cmd_q :
+                            (inst1_to_alu1) ? inst1_cmd_q : 7'd0;
 
 // Pipeline ALU1 destination info alongside execution
 // PHASE 5: Exception priority and pipeline control
@@ -1291,6 +1294,7 @@ always @(posedge clk) begin
     if (rst_n == 1'b0) begin
         alu1_dst_reg_r <= 3'd0;
         alu1_dst_is_reg_r <= 1'b0;
+        alu1_cmd_r <= 7'd0;
         alu1_valid_r <= 1'b0;
         alu1_result_r <= 32'd0;
     end
@@ -1310,10 +1314,11 @@ always @(posedge clk) begin
         // Keep destination tracking for debugging, but result won't commit
     end
     else begin
-        // Capture destination when ALU1 starts executing
+        // Capture destination and command when ALU1 starts executing
         if (alu1_valid_dual) begin
             alu1_dst_reg_r <= alu1_dst_reg_next;
             alu1_dst_is_reg_r <= alu1_dst_is_reg_next;
+            alu1_cmd_r <= alu1_cmd_next;
         end
 
         // Capture result when ALU1 completes
@@ -1325,14 +1330,16 @@ always @(posedge clk) begin
 end
 
 // Decode which register ALU1 is writing (one-hot encoding)
-wire alu1_wr_eax = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd0);
-wire alu1_wr_ecx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd1);
-wire alu1_wr_edx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd2);
-wire alu1_wr_ebx = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd3);
-wire alu1_wr_esp = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd4);
-wire alu1_wr_ebp = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd5);
-wire alu1_wr_esi = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd6);
-wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && (alu1_dst_reg_r == 3'd7);
+// Filter out non-writing instructions (CMP, TEST) which only set flags
+wire alu1_actually_writes = (alu1_cmd_r != `CMD_CMP) && (alu1_cmd_r != `CMD_TEST);
+wire alu1_wr_eax = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd0);
+wire alu1_wr_ecx = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd1);
+wire alu1_wr_edx = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd2);
+wire alu1_wr_ebx = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd3);
+wire alu1_wr_esp = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd4);
+wire alu1_wr_ebp = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd5);
+wire alu1_wr_esi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd6);
+wire alu1_wr_edi = alu1_valid_r && alu1_dst_is_reg_r && alu1_actually_writes && (alu1_dst_reg_r == 3'd7);
 
 //------------------------------------------------------------------------------
 
@@ -1672,17 +1679,16 @@ write write_inst(
     .exc_eip                       (exc_eip),                       //input [31:0]
 
     //ALU1 write port (from dual-issue execution)
-    // DISABLED: Superscalar experimental, tie off to prevent register clobbering
-    .wr1_valid                     (1'b0),                           //input - was: alu1_valid_r
-    .wr1_result                    (32'b0),                          //input [31:0] - was: alu1_result_r
-    .wr1_eax                       (1'b0),                           //input - was: alu1_wr_eax
-    .wr1_ecx                       (1'b0),                           //input - was: alu1_wr_ecx
-    .wr1_edx                       (1'b0),                           //input - was: alu1_wr_edx
-    .wr1_ebx                       (1'b0),                           //input - was: alu1_wr_ebx
-    .wr1_esp                       (1'b0),                           //input - was: alu1_wr_esp
-    .wr1_ebp                       (1'b0),                           //input - was: alu1_wr_ebp
-    .wr1_esi                       (1'b0),                           //input - was: alu1_wr_esi
-    .wr1_edi                       (1'b0),                           //input - was: alu1_wr_edi
+    .wr1_valid                     (alu1_valid_r),                  //input
+    .wr1_result                    (alu1_result_r),                 //input [31:0]
+    .wr1_eax                       (alu1_wr_eax),                   //input
+    .wr1_ecx                       (alu1_wr_ecx),                   //input
+    .wr1_edx                       (alu1_wr_edx),                   //input
+    .wr1_ebx                       (alu1_wr_ebx),                   //input
+    .wr1_esp                       (alu1_wr_esp),                   //input
+    .wr1_ebp                       (alu1_wr_ebp),                   //input
+    .wr1_esi                       (alu1_wr_esi),                   //input
+    .wr1_edi                       (alu1_wr_edi),                   //input
 
     //output
     .real_mode                     (real_mode),                     //output
