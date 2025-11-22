@@ -134,7 +134,8 @@ wire mem_available = !mem_busy;
 //------------------------------------------------------------------------------
 
 // Complex instructions must execute alone (no dual-issue)
-wire inst0_must_single_issue = inst0_is_complex || inst0_is_branch || inst0_uses_div;
+// Also block memory ops and div - dual_execute can only handle ALU and multiply
+wire inst0_must_single_issue = inst0_is_complex || inst0_is_branch || inst0_uses_div || inst0_uses_memory;
 wire inst1_must_single_issue = inst1_is_complex || inst1_is_branch || inst1_uses_div;
 
 // Can we dispatch inst0?
@@ -180,6 +181,8 @@ assign can_dispatch_inst1 =
     inst1_mem_ok;
 
 // Dispatch decisions
+// Note: branches/complex/div/memory are filtered at queue entrance, so only
+// ALU and multiply operations reach here
 assign dispatch_inst0 = can_dispatch_inst0;
 assign dispatch_inst1 = can_dispatch_inst0 && can_dispatch_inst1;
 assign dual_issue = dispatch_inst0 && dispatch_inst1;
@@ -188,13 +191,15 @@ assign dual_issue = dispatch_inst0 && dispatch_inst1;
 // Execution Unit Assignment
 //------------------------------------------------------------------------------
 
-// Default routing: inst0 -> ALU0, inst1 -> ALU1
-// If ALU0 is busy, try to route inst0 to ALU1
-assign inst0_to_alu0 = inst0_uses_alu && alu0_available && !inst1_valid;
-assign inst0_to_alu1 = inst0_uses_alu && (!alu0_available || inst1_valid) && alu1_available;
+// Fixed routing policy:
+// - inst0 defaults to ALU0, falls back to ALU1 if ALU0 busy
+// - inst1 defaults to ALU1, can use ALU0 if inst0 doesn't need it
+// - When dual-issue, inst0→ALU0 and inst1→ALU1 (standard superscalar config)
+assign inst0_to_alu0 = inst0_uses_alu && alu0_available;
+assign inst0_to_alu1 = inst0_uses_alu && !alu0_available && alu1_available;
 
 assign inst1_to_alu0 = inst1_uses_alu && !inst0_uses_alu && alu0_available;
-assign inst1_to_alu1 = inst1_uses_alu && (inst0_uses_alu || !alu0_available) && alu1_available;
+assign inst1_to_alu1 = inst1_uses_alu && alu1_available && (inst0_uses_alu || !alu0_available);
 
 //------------------------------------------------------------------------------
 // Stall Signals

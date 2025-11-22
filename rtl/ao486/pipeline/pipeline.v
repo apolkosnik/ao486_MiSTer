@@ -907,13 +907,19 @@ wire [2:0]  queue_count;
 
 assign queue_reset = exe_reset;  // Reset queue when pipeline resets
 
+// Only queue simple instructions that can be dual-issued
+// Branches, complex ops, divides, and memory ops must use original execute path
+// dual_execute can only handle ALU operations and multiply (shared multiplier)
+wire rd_can_queue = !(dec_is_branch || dec_is_complex || dec_is_div || rd_dst_is_memory);
+wire rd_ready_to_queue = rd_ready && rd_can_queue;
+
 instruction_queue iq_inst(
     .clk                (clk),
     .rst_n              (rst_n),
     .queue_reset        (queue_reset),
 
-    // From READ stage
-    .rd_ready           (rd_ready),
+    // From READ stage - filtered to only accept queueable instructions
+    .rd_ready           (rd_ready_to_queue),
     .rd_cmd             (rd_cmd),
     .rd_cmdex           (rd_cmdex),
     .rd_mutex_next      (rd_mutex_next),
@@ -1385,8 +1391,11 @@ wire [31:0] dst_final;
 wire        exe_mult_overflow;
 wire [31:0] exe_stack_offset;
 
-// Gate rd_ready to execute when queue has instructions
-// This prevents double execution: instructions go through queue OR direct to execute, not both
+// Gate rd_ready to execute based on queue state and instruction type
+// - If queue is empty: all instructions go directly to execute
+// - If queue has instructions: only non-queueable instructions bypass (to maintain order)
+//   Actually NO - can't reorder! Non-queueable must wait if queue has instructions.
+// So: execute receives instructions only when queue is empty
 wire rd_ready_to_execute = rd_ready && queue_empty;
 
 execute execute_inst(
