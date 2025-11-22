@@ -155,7 +155,6 @@ wire can_dispatch_inst0;
 assign can_dispatch_inst0 =
     inst0_valid &&
     !inst0_has_dependency &&
-    !inst0_must_single_issue &&  // Defense-in-depth: don't dispatch branches/complex/div/memory
     inst0_alu_ok &&
     inst0_mult_ok &&
     inst0_div_ok &&
