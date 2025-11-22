@@ -1278,8 +1278,15 @@ assign div_available = !mult_div_busy;
 // Phase 4: Dual Writeback - Destination Register Tracking
 //------------------------------------------------------------------------------
 
-// Track which register ALU0 writes (handled by existing write stage)
-// Track which register ALU1 writes through execution pipeline
+// Track destination registers and results for both ALUs
+// Both ALU0 and ALU1 need writeback since either instruction can route to either ALU
+
+// Track ALU0 destination through execution pipeline
+reg [2:0]  alu0_dst_reg_r;
+reg        alu0_dst_is_reg_r;
+reg [6:0]  alu0_cmd_r;
+reg        alu0_valid_r;
+reg [31:0] alu0_result_r;
 
 // Track ALU1 destination through execution pipeline
 reg [2:0]  alu1_dst_reg_r;
@@ -1294,6 +1301,16 @@ reg [31:0] alu1_result_r;
 wire [2:0] inst0_dst_reg = inst0_dst_is_reg_q ? inst0_modregrm_q[5:3] : inst0_modregrm_q[2:0];
 wire [2:0] inst1_dst_reg = inst1_dst_is_reg_q ? inst1_modregrm_q[5:3] : inst1_modregrm_q[2:0];
 
+// Determine destination register and command for ALU0 based on which instruction was routed there
+wire [2:0] alu0_dst_reg_next = (inst0_to_alu0) ? inst0_dst_reg :
+                                (inst1_to_alu0) ? inst1_dst_reg : 3'd0;
+
+wire alu0_dst_is_reg_next = (inst0_to_alu0 && inst0_dst_is_reg_q) ||
+                             (inst1_to_alu0 && inst1_dst_is_reg_q);
+
+wire [6:0] alu0_cmd_next = (inst0_to_alu0) ? inst0_cmd_q :
+                            (inst1_to_alu0) ? inst1_cmd_q : 7'd0;
+
 // Determine destination register and command for ALU1 based on which instruction was routed there
 wire [2:0] alu1_dst_reg_next = (inst0_to_alu1) ? inst0_dst_reg :
                                 (inst1_to_alu1) ? inst1_dst_reg : 3'd0;
@@ -1303,6 +1320,35 @@ wire alu1_dst_is_reg_next = (inst0_to_alu1 && inst0_dst_is_reg_q) ||
 
 wire [6:0] alu1_cmd_next = (inst0_to_alu1) ? inst0_cmd_q :
                             (inst1_to_alu1) ? inst1_cmd_q : 7'd0;
+
+// Pipeline ALU0 destination info alongside execution
+always @(posedge clk) begin
+    if (rst_n == 1'b0) begin
+        alu0_dst_reg_r <= 3'd0;
+        alu0_dst_is_reg_r <= 1'b0;
+        alu0_cmd_r <= 7'd0;
+        alu0_valid_r <= 1'b0;
+        alu0_result_r <= 32'd0;
+    end
+    else if (exe_reset || wr_reset) begin
+        // Pipeline flush: Invalidate ALU0 writeback on exceptions
+        alu0_valid_r <= 1'b0;
+    end
+    else begin
+        // Capture destination and command when ALU0 starts executing
+        if (alu0_valid_dual) begin
+            alu0_dst_reg_r <= alu0_dst_reg_next;
+            alu0_dst_is_reg_r <= alu0_dst_is_reg_next;
+            alu0_cmd_r <= alu0_cmd_next;
+        end
+
+        // Capture result when ALU0 completes
+        alu0_valid_r <= alu0_ready_dual;
+        if (alu0_ready_dual) begin
+            alu0_result_r <= alu0_result_dual;
+        end
+    end
+end
 
 // Pipeline ALU1 destination info alongside execution
 // PHASE 5: Exception priority and pipeline control
@@ -1344,6 +1390,18 @@ always @(posedge clk) begin
         end
     end
 end
+
+// Decode which register ALU0 is writing (one-hot encoding)
+// Filter out non-writing instructions (CMP, TEST) which only set flags
+wire alu0_actually_writes = (alu0_cmd_r != `CMD_CMP) && (alu0_cmd_r != `CMD_TEST);
+wire alu0_wr_eax = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd0);
+wire alu0_wr_ecx = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd1);
+wire alu0_wr_edx = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd2);
+wire alu0_wr_ebx = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd3);
+wire alu0_wr_esp = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd4);
+wire alu0_wr_ebp = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd5);
+wire alu0_wr_esi = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd6);
+wire alu0_wr_edi = alu0_valid_r && alu0_dst_is_reg_r && alu0_actually_writes && (alu0_dst_reg_r == 3'd7);
 
 // Decode which register ALU1 is writing (one-hot encoding)
 // Filter out non-writing instructions (CMP, TEST) which only set flags
@@ -1747,6 +1805,18 @@ write write_inst(
     .exc_restore_esp               (exc_restore_esp),               //input
     .exc_push_error                (exc_push_error),                //input
     .exc_eip                       (exc_eip),                       //input [31:0]
+
+    //ALU0 write port (from dual-issue execution)
+    .wr0_valid                     (alu0_valid_r),                  //input
+    .wr0_result                    (alu0_result_r),                 //input [31:0]
+    .wr0_eax                       (alu0_wr_eax),                   //input
+    .wr0_ecx                       (alu0_wr_ecx),                   //input
+    .wr0_edx                       (alu0_wr_edx),                   //input
+    .wr0_ebx                       (alu0_wr_ebx),                   //input
+    .wr0_esp                       (alu0_wr_esp),                   //input
+    .wr0_ebp                       (alu0_wr_ebp),                   //input
+    .wr0_esi                       (alu0_wr_esi),                   //input
+    .wr0_edi                       (alu0_wr_edi),                   //input
 
     //ALU1 write port (from dual-issue execution)
     .wr1_valid                     (alu1_valid_r),                  //input

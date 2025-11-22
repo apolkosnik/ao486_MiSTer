@@ -102,6 +102,18 @@ module write_register(
     //write reg data
     input       [31:0]  result,
 
+    //write port 0 (from ALU0 for dual-issue)
+    input               wr0_valid,
+    input       [31:0]  wr0_result,
+    input               wr0_eax,
+    input               wr0_ecx,
+    input               wr0_edx,
+    input               wr0_ebx,
+    input               wr0_esp,
+    input               wr0_ebp,
+    input               wr0_esi,
+    input               wr0_edi,
+
     //write port 1 (from ALU1 for dual-issue)
     input               wr1_valid,
     input       [31:0]  wr1_result,
@@ -113,7 +125,7 @@ module write_register(
     input               wr1_ebp,
     input               wr1_esi,
     input               wr1_edi,
-   
+
     //output
     output      [1:0]   cpl,
     
@@ -428,6 +440,8 @@ always @(posedge clk) begin
         eax <= `STARTUP_EAX;
     else if(w_write_regrm)
         eax <= eax_value;
+    else if(wr0_valid && wr0_eax)
+        eax <= wr0_result;
     else if(wr1_valid && wr1_eax)
         eax <= wr1_result;
     else
@@ -439,6 +453,8 @@ always @(posedge clk) begin
         ebx <= `STARTUP_EBX;
     else if(w_write_regrm)
         ebx <= ebx_value;
+    else if(wr0_valid && wr0_ebx)
+        ebx <= wr0_result;
     else if(wr1_valid && wr1_ebx)
         ebx <= wr1_result;
     else
@@ -450,6 +466,8 @@ always @(posedge clk) begin
         ecx <= `STARTUP_ECX;
     else if(w_write_regrm)
         ecx <= ecx_value;
+    else if(wr0_valid && wr0_ecx)
+        ecx <= wr0_result;
     else if(wr1_valid && wr1_ecx)
         ecx <= wr1_result;
     else
@@ -461,6 +479,8 @@ always @(posedge clk) begin
         edx <= `STARTUP_EDX;
     else if(w_write_regrm)
         edx <= edx_value;
+    else if(wr0_valid && wr0_edx)
+        edx <= wr0_result;
     else if(wr1_valid && wr1_edx)
         edx <= wr1_result;
     else
@@ -472,6 +492,8 @@ always @(posedge clk) begin
         esi <= `STARTUP_ESI;
     else if(w_write_regrm)
         esi <= esi_value;
+    else if(wr0_valid && wr0_esi)
+        esi <= wr0_result;
     else if(wr1_valid && wr1_esi)
         esi <= wr1_result;
     else
@@ -483,6 +505,8 @@ always @(posedge clk) begin
         edi <= `STARTUP_EDI;
     else if(w_write_regrm)
         edi <= edi_value;
+    else if(wr0_valid && wr0_edi)
+        edi <= wr0_result;
     else if(wr1_valid && wr1_edi)
         edi <= wr1_result;
     else
@@ -494,6 +518,8 @@ always @(posedge clk) begin
         ebp <= `STARTUP_EBP;
     else if(w_write_regrm)
         ebp <= ebp_value;
+    else if(wr0_valid && wr0_ebp)
+        ebp <= wr0_result;
     else if(wr1_valid && wr1_ebp)
         ebp <= wr1_result;
     else
@@ -507,6 +533,8 @@ always @(posedge clk) begin
         esp <= esp_value;
     else if(exc_restore_esp)
         esp <= wr_esp_prev;
+    else if(wr0_valid && wr0_esp)
+        esp <= wr0_result;
     else if(wr1_valid && wr1_esp)
         esp <= wr1_result;
     else

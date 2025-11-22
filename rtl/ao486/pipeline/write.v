@@ -293,6 +293,18 @@ module write(
     input               exe_mult_overflow,
     input       [31:0]  exe_stack_offset,
 
+    //ALU0 write port (from dual-issue execution)
+    input               wr0_valid,
+    input       [31:0]  wr0_result,
+    input               wr0_eax,
+    input               wr0_ecx,
+    input               wr0_edx,
+    input               wr0_ebx,
+    input               wr0_esp,
+    input               wr0_ebp,
+    input               wr0_esi,
+    input               wr0_edi,
+
     //ALU1 write port (from dual-issue execution)
     input               wr1_valid,
     input       [31:0]  wr1_result,
@@ -1260,6 +1272,18 @@ write_register write_register_inst(
     
     //write reg data
     .result                        (result),                        //input [31:0]
+
+    //write port 0 (from ALU0 for dual-issue)
+    .wr0_valid                     (wr0_valid),                     //input
+    .wr0_result                    (wr0_result),                    //input [31:0]
+    .wr0_eax                       (wr0_eax),                       //input
+    .wr0_ecx                       (wr0_ecx),                       //input
+    .wr0_edx                       (wr0_edx),                       //input
+    .wr0_ebx                       (wr0_ebx),                       //input
+    .wr0_esp                       (wr0_esp),                       //input
+    .wr0_ebp                       (wr0_ebp),                       //input
+    .wr0_esi                       (wr0_esi),                       //input
+    .wr0_edi                       (wr0_edi),                       //input
 
     //write port 1 (from ALU1 for dual-issue)
     .wr1_valid                     (wr1_valid),                     //input
