@@ -1385,6 +1385,10 @@ wire [31:0] dst_final;
 wire        exe_mult_overflow;
 wire [31:0] exe_stack_offset;
 
+// Gate rd_ready to execute when queue has instructions
+// This prevents double execution: instructions go through queue OR direct to execute, not both
+wire rd_ready_to_execute = rd_ready && queue_empty;
+
 execute execute_inst(
     .clk                (clk),
     .rst_n              (rst_n),
@@ -1561,7 +1565,7 @@ execute execute_inst(
                      
     //rd pipeline
     .exe_busy                      (exe_busy),                      //output
-    .rd_ready                      (rd_ready),                      //input
+    .rd_ready                      (rd_ready_to_execute),           //input - gated to prevent double execution
     .rd_decoder                    (rd_decoder),                    //input [87:0]
     .rd_eip                        (rd_eip),                        //input [31:0]
     .rd_operand_32bit              (rd_operand_32bit),              //input
