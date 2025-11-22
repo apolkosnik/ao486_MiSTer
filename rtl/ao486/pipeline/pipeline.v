@@ -910,7 +910,8 @@ assign queue_reset = exe_reset;  // Reset queue when pipeline resets
 // Only queue simple instructions that can be dual-issued
 // Branches, complex ops, divides, and memory ops must use original execute path
 // dual_execute can only handle ALU operations and multiply (shared multiplier)
-wire rd_can_queue = !(dec_is_branch || dec_is_complex || dec_is_div || rd_dst_is_memory);
+// NOTE: Also exclude EDX:EAX destinations (IMUL/MUL) since dual writeback only supports single register
+wire rd_can_queue = !(dec_is_branch || dec_is_complex || dec_is_div || rd_dst_is_memory || rd_dst_is_edx_eax);
 // Queueable instructions enter queue only if queue not full
 // Non-queueable instructions must wait for queue to drain (to preserve program order)
 wire rd_ready_to_queue = rd_ready && rd_can_queue && !queue_full;
