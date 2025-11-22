@@ -911,7 +911,9 @@ assign queue_reset = exe_reset;  // Reset queue when pipeline resets
 // Branches, complex ops, divides, and memory ops must use original execute path
 // dual_execute can only handle ALU operations and multiply (shared multiplier)
 wire rd_can_queue = !(dec_is_branch || dec_is_complex || dec_is_div || rd_dst_is_memory);
-wire rd_ready_to_queue = rd_ready && rd_can_queue;
+// Queueable instructions enter queue only if queue not full
+// Non-queueable instructions must wait for queue to drain (to preserve program order)
+wire rd_ready_to_queue = rd_ready && rd_can_queue && !queue_full;
 
 instruction_queue iq_inst(
     .clk                (clk),
@@ -962,8 +964,11 @@ instruction_queue iq_inst(
     .queue_count        (queue_count)
 );
 
-// Stall READ stage if instruction queue is full
-assign rd_busy = rd_busy_original || queue_full;
+// Stall READ stage if:
+// 1. Original execute is busy, OR
+// 2. Queue is full, OR
+// 3. Queue not empty AND incoming instruction can't be queued (must wait for queue to drain to preserve order)
+assign rd_busy = rd_busy_original || queue_full || (!queue_empty && !rd_can_queue);
 
 //------------------------------------------------------------------------------
 // Instruction Classification for Dispatch
@@ -1223,8 +1228,8 @@ dual_execute dual_execute_inst(
     .alu0_src           (alu0_src_dual),
     .alu0_dst           (alu0_dst_dual),
     .alu0_is_8bit       (alu0_is_8bit_dual),
-    .alu0_uses_mult     (inst0_uses_mult && inst0_to_alu0),
-    .alu0_uses_div      (inst0_uses_div && inst0_to_alu0),
+    .alu0_uses_mult     ((inst0_uses_mult && inst0_to_alu0) || (inst1_uses_mult && inst1_to_alu0)),
+    .alu0_uses_div      ((inst0_uses_div && inst0_to_alu0) || (inst1_uses_div && inst1_to_alu0)),
 
     // ALU0 outputs
     .alu0_busy          (alu0_busy_dual),
